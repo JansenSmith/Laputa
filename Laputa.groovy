@@ -163,8 +163,8 @@ public class OpenAIAPIClient {
 
         String resp = response.toString()
 
-	    System.out.println("API Response:");
-	    System.out.println(resp);
+//	    System.out.println("API Response:");
+//	    System.out.println(resp);
 
         return resp;
     }
@@ -178,14 +178,56 @@ public class OpenAIAPIClient {
         String data = "{\"input\": " + buildInputJson(inputs) + ", \"model\": \"text-embedding-ada-002\"}";
         String response = callOpenAIAPI(EMBEDDING_API_URL, data, apiKey);
 
+	    //System.out.println("API Response:");
+	    //System.out.println(response);
+
         // Extract the binary string from the response
         String binaryString = extractBinaryString(response);
+		System.out.println("Binary String:");
+		System.out.println(binaryString);
 
         // Decode the binary string to obtain the list of floating-point numbers
         List<Float> embeddings = decodeBinaryString(binaryString);
 
         return embeddings;
     }
+
+	private static String extractBinaryString(String response) {
+	    // Find the start and end index of the binary string
+	    int startIndex = response.indexOf("\"embedding\": [") + 14;
+	    int endIndex = response.indexOf("]", startIndex);
+	
+	    // Print diagnostic information
+	    System.out.println("Start Index: " + startIndex);
+	    System.out.println("End Index: " + endIndex);
+	
+	    // Extract the substring
+	    String substring = response.substring(startIndex, endIndex);
+	
+	    // Print the extracted substring for debugging
+	    System.out.println("Extracted Substring:");
+	    System.out.println(substring);
+	
+	    // Check if the extracted substring contains any invalid characters
+	    boolean containsInvalidChars = substring.matches("[A-Za-z0-9+/=]+");
+	    System.out.println("Contains Invalid Characters: " + !containsInvalidChars);
+	
+	    return substring;
+	}
+
+
+
+	private static List<Float> decodeBinaryString(String binaryString) {
+	    byte[] binaryData = binaryString.decodeBase64()
+	    ByteBuffer buffer = ByteBuffer.wrap(binaryData)
+	    buffer.order(ByteOrder.LITTLE_ENDIAN)
+	
+	    List<Float> embeddings = []
+	    while (buffer.hasRemaining()) {
+	        embeddings.add(buffer.getFloat())
+	    }
+	    return embeddings
+	}
 
     private static String escapeNewLines(String text) {
         return text.replace("\n", "\\n");
@@ -202,25 +244,6 @@ public class OpenAIAPIClient {
         json.append("]");
         return json.toString();
     }
-
-    private static String extractBinaryString(String response) {
-        // Extract the binary string from the API response
-        int startIndex = response.indexOf("\"embedding\": \"") + 14;
-        int endIndex = response.indexOf("\"", startIndex);
-        return response.substring(startIndex, endIndex);
-    }
-
-	private static List<Float> decodeBinaryString(String binaryString) {
-	    byte[] binaryData = binaryString.decodeBase64()
-	    ByteBuffer buffer = ByteBuffer.wrap(binaryData)
-	    buffer.order(ByteOrder.LITTLE_ENDIAN)
-	
-	    List<Float> embeddings = []
-	    while (buffer.hasRemaining()) {
-	        embeddings.add(buffer.getFloat())
-	    }
-	    return embeddings
-	}
 }
 
 	
