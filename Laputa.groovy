@@ -8,6 +8,8 @@ public class QAPatternExample {
 
     public static void main(String[] args) throws IOException {
         String question = "What does shot scraper do?";
+        String keyLocation = ScriptingEngine.getWorkspace().getAbsolutePath()+"/gpt-key.txt"
+
         String apiKey = "YOUR_OPENAI_API_KEY";
 
         // Step 1: Run a search query to find relevant content
