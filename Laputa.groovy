@@ -96,9 +96,19 @@ public class QAPatternExample {
 		connection.setDoOutput(true);
 		
 		//String data = "{\"prompt\": \"" + prompt + "\", \"max_tokens\": 100}";
-		String data = "{\"prompt\": \"" + prompt + "\"}";
-		System.out.println("JSON Data: " + data);
-		connection.getOutputStream().write(data.getBytes());
+	    String promptWithEscapes = prompt.replace("\n", "\\n");
+	    String data = "{\"prompt\": \"" + promptWithEscapes + "\"}";
+	    System.out.println("JSON Data: " + data);
+	
+	    // Validate the JSON
+	    try {
+	        new JSONObject(data);
+	        System.out.println("JSON is valid.");
+	    } catch (Exception e) {
+	        System.out.println("JSON is invalid. Error: " + e.getMessage());
+	    }
+	
+	    connection.getOutputStream().write(data.getBytes());
 		
 	    int responseCode = connection.getResponseCode();
 	    System.out.println("Response Code: " + responseCode);
