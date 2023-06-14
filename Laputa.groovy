@@ -87,13 +87,13 @@ public class QAPatternExample {
 
         List<List<Float>> embeddings = OpenAIAPIClient.callEmbeddingAPI(inputs, apiKey);
 
-        System.out.println("Embeddings:");
-        for (List<Float> embedding : embeddings) {
-        	for (Float emb : embedding) {
-            	System.out.println("found a number");
-            	System.out.println(emb);
-        	}
-        }
+//        System.out.println("Embeddings:");
+//        for (List<Float> embedding : embeddings) {
+//        	for (Float emb : embedding) {
+//            	System.out.println("found a number");
+//            	System.out.println(emb);
+//        	}
+//        }
 //        String answer = OpenAIAPIClient.callDavinciAPI(prompt, apiKey);
 
         // Step 4: Process and display the answer
