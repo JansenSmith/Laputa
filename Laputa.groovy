@@ -25,6 +25,7 @@ import okhttp3.Response;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
+import org.json.JSONStringer;
 import org.apache.http.Header;
 import org.apache.http.entity.ContentType;
 import org.apache.http.impl.client.CloseableHttpClient;
@@ -39,96 +40,196 @@ import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.http.Header;
 import org.apache.http.util.EntityUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.safety.Cleaner;
 import org.jsoup.safety.Whitelist;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
+import java.io.File;
+import java.nio.file.Files;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 // inspired by https://simonwillison.net/2023/Jan/13/semantic-search-answers/
 
 public class QAPatternExample {
 
     public static void main(String[] args) throws IOException {
-		System.out.println("reached here")
-        String question = "What is a CSG file?";
+        String question = "How do i make a box?";
+		System.out.println("Question: "+ question)
 		
-		// Look for or save OpenAI API key
+		
+		// Step 1: Retrieve user's API key
         String keyLocation = ScriptingEngine.getWorkspace().getAbsolutePath() + File.separator +"gpt-key.txt"
 		if(!new File(keyLocation).exists()) {
 			KeyDialog(keyLocation)
 			return;
 		}
-		
-		
 		System.out.println("Loading API key from "+keyLocation)
 		String apiKey = new String(Files.readAllBytes(Paths.get(keyLocation)));
 		//println "API key: "+apiKey
 		
-		// Step 1: Download documentation in markdown format
+		// Step 2: Get embeddings for the question
+		List<String> questionSegments = getSegmentsFromString(question);
+		List<Float> questionEmbeddings = getEmbeddings(questionSegments, apiKey);
+		
+		// Step 3: Download documentation in markdown format
 		String linkToDocumentation = "https://github.com/CommonWealthRobotics/CommonWealthRobotics.github.io/tree/a0551b55ee1cc64f48c16e08a6f7928e7d6601bd/content/JavaCAD";
 		String savePath = ScriptingEngine.getWorkspace().getAbsolutePath() + File.separator + "documentation";
 		//new MarkdownDownloader(linkToDocumentation, savePath);
-		System.out.println("reached here")
 		
-		// Step 2: Iterate through markdown files and get embeddings
-		List<String> inputs = new ArrayList<>();
-		File[] markdownFiles = new File(savePath).listFiles();
-		if (markdownFiles != null) {
-			for (File file : markdownFiles) {
+		// Step 4: Iterate through markdown files, get embeddings, and cache locally
+		List<File> markdownFiles = getMarkdownFiles(savePath);
+		Map<File, List<Float>> embeddingsMap = getEmbeddingsMap(markdownFiles, apiKey);
+
+	    // Step 5: Calculate similarity between question embeddings and markdown file embeddings
+		Map<File, Float> similarityMap = calculateSimilarity(questionEmbeddings, embeddingsMap);
+	
+	    // Step 6: Find the most similar file
+		File mostSimilarFile = findMostSimilarFile(similarityMap, true);
+		
+		// Step 7: Construct the prompt for the OpenAI API call
+		String prompt = constructPrompt(mostSimilarFile, question);
+
+		// Step 8: Call the OpenAI API to get the answer
+		String answer = OpenAIAPIClient.callDavinciAPI(prompt, apiKey);
+
+		// Step 9: Process and display the answer
+		System.out.println("Answer:" + answer);
+		
+    }
+	
+	private static List<File> getMarkdownFiles(String savePath) {
+		List<File> markdownFiles = new ArrayList<>();
+		File[] files = new File(savePath).listFiles();
+
+		if (files != null) {
+			for (File file : files) {
 				if (file.isFile() && file.getName().endsWith(".md")) {
-					String content = new String(Files.readAllBytes(file.toPath()));
-					// Split content into smaller segments if necessary
-					String[] segments = content.split("\\r?\\n\\r?\\n"); // Split by empty lines
-		
-					// Add each segment as an input for embeddings
-					for (String segment : segments) {
-						inputs.add(segment);
-//						System.out.println(segment + "/n")
-					}
+					markdownFiles.add(file);
 				}
 			}
 		}
-		System.out.println("reached here")
-		
-		// Step 3: Call the OpenAI API with embeddings
-        inputs = ["input1", "input2", "input3"]; // test inputs
-		List<List<Float>> embeddings = OpenAIAPIClient.callEmbeddingAPI(inputs.toArray(new String[0]), apiKey);
-		
-		new Exception("finished").printStackTrace()
-		
-		
-//		// Step 1: Download documentation in markdown format
-//		String linkToDocumentation = "https://github.com/CommonWealthRobotics/CommonWealthRobotics.github.io/tree/a0551b55ee1cc64f48c16e08a6f7928e7d6601bd/content/JavaCAD";
-//		String savePath = ScriptingEngine.getWorkspace().getAbsolutePath() + File.separator + "documentation"
-//		new MarkdownDownloader(linkToDocumentation, savePath)
-//
-//        // Step 2: Run a search query to find relevant content
-//        String searchResults = runSearchQuery(question);
-//
-//        // Step 3: Extract relevant content and construct the prompt
-//        String prompt = constructPrompt(searchResults, question);
-//        System.out.println("\nPrompt: \n" + prompt);
-//
-//        // Step 4: Call the OpenAI API with embeddings
-//        String[] inputs = ["input1", "input2", "input3"];
-//
-//        List<List<Float>> embeddings = OpenAIAPIClient.callEmbeddingAPI(inputs, apiKey);
 
-//        System.out.println("Embeddings:");
-//        for (List<Float> embedding : embeddings) {
-//        	for (Float emb : embedding) {
-//            	System.out.println("found a number");
-//            	System.out.println(emb);
-//        	}
-//        }
-//        String answer = OpenAIAPIClient.callDavinciAPI(prompt, apiKey);
+		return markdownFiles;
+	}
+	
+	private static String readFileContent(File file) throws IOException {
+		return new String(Files.readAllBytes(file.toPath()));
+	}
 
-        // Step 4: Process and display the answer
-//        String processedAnswer = processAnswer(answer);
-//        System.out.println("\nProcessed Answer: \n" + processedAnswer);
-    }
+	private static List<String> getSegmentsFromFile(File file) {
+		try {
+			String content = new String(Files.readAllBytes(file.toPath()));
+			// Split content into smaller segments if necessary
+			return Arrays.asList(content.split("\\r?\\n\\r?\\n")); // Split by empty lines
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+
+		return new ArrayList<>();
+	}
+	
+	private static List<String> getSegmentsFromString(String input) {
+		// Split the input string based on whitespace
+		String[] segmentsArray = input.split("\\s+");
+	
+		// Convert the array to a list
+		List<String> segmentsList = Arrays.asList(segmentsArray);
+	
+		// Remove any empty segments
+		segmentsList.removeAll { it.isEmpty() };
+	
+		return segmentsList;
+	}
+	
+	private static List<Float> getEmbeddings(List<String> segments, String apiKey) {
+	    // Call the OpenAI API with segments to get embeddings
+	    List<List<Float>> embeddings = OpenAIAPIClient.callEmbeddingAPI(segments.toArray(new String[0]), apiKey);
+	
+	    List<Float> flattenedEmbeddings = new ArrayList<>();
+	    for (List<Float> segmentEmbeddings : embeddings) {
+	        flattenedEmbeddings.addAll(segmentEmbeddings);
+	    }
+	
+	    return flattenedEmbeddings;
+	}
+	
+	private static Map<File, List<Float>> getEmbeddingsMap(List<File> markdownFiles, String apiKey) {
+		Map<File, List<Float>> embeddingsMap = new HashMap<>();
+	
+		for (File file : markdownFiles) {
+			List<String> segments = getSegmentsFromFile(file);
+			List<Float> embeddings = getEmbeddings(segments, apiKey);
+			embeddingsMap.put(file, embeddings);
+			// cacheEmbeddings(file, embeddings); // TODO - implement
+		}
+	
+		return embeddingsMap;
+	}
+	
+	private static Map<File, Float> calculateSimilarity(List<Float> questionEmbeddings, Map<File, List<Float>> embeddingsMap) {
+		Map<File, Float> similarityMap = new HashMap<>();
+	
+		for (Map.Entry<File, List<Float>> entry : embeddingsMap.entrySet()) {
+			File file = entry.getKey();
+			List<Float> embeddings = entry.getValue();
+			float similarity = cosineSimilarity(questionEmbeddings, embeddings);
+			similarityMap.put(file, similarity);
+		}
+	
+		return similarityMap;
+	}
+	
+	private static File findMostSimilarFile(Map<File, Float> similarityMap, boolean print) {
+		File mostSimilarFile = null;
+		float highestSimilarity = -1;
+	
+		for (Map.Entry<File, Float> entry : similarityMap.entrySet()) {
+			File file = entry.getKey();
+			float similarity = entry.getValue();
+			if (similarity > highestSimilarity) {
+				highestSimilarity = similarity;
+				mostSimilarFile = file;
+			}
+		}
+		
+		if(print) {
+			if (mostSimilarFile != null) {
+				System.out.println("Most similar file: " + mostSimilarFile.getName());
+			} else {
+				System.out.println("No similar file found.");
+			}
+		}
+	
+		return mostSimilarFile;
+	}
+	
+	private static float cosineSimilarity(List<Float> a, List<Float> b) {
+	    float dotProduct = 0;
+	    float magnitudeA = 0;
+	    float magnitudeB = 0;
+	
+	    // Ensure that the lists have the same size
+	    int size = Math.min(a.size(), b.size());
+	    for (int i = 0; i < size; i++) {
+	        dotProduct += a.get(i) * b.get(i);
+	        magnitudeA += Math.pow(a.get(i), 2);
+	        magnitudeB += Math.pow(b.get(i), 2);
+	    }
+	
+	    magnitudeA = (float) Math.sqrt(magnitudeA);
+	    magnitudeB = (float) Math.sqrt(magnitudeB);
+	
+	    return dotProduct / (magnitudeA * magnitudeB);
+	}
+
 
 	private static KeyDialog(String keyLocation) {
 		BowlerStudio.runLater({
@@ -173,11 +274,12 @@ public class QAPatternExample {
         return "Search results for the question: " + question;
     }
 
-    private static String constructPrompt(String searchResults, String question) {
+    private static String constructPrompt(File mostSimilarFile, String question) {
         // Extract relevant content from search results
         // Glue the extracted content together with the question to form the prompt
-        return searchResults + "\n\nGiven the above content, answer the following question: " + question;
-    }
+	    String context = readFileContent(mostSimilarFile);
+	    return "Context:" + "\n```\n" + context + "\n```\n" + "Given the above context, answer the following question" + "\n```\n" + question + "\n```\n";
+	}
 
 
 	private static String processAnswer(String answer) {
@@ -218,11 +320,9 @@ public class OpenAIAPIClient {
         connection.setRequestProperty("Content-Type", "application/json");
         connection.setRequestProperty("Authorization", "Bearer " + apiKey);
         connection.setDoOutput(true);
-		
-		// Scrub HTML tags from the data
-		String cleanedData = cleanHtml(data);
-		System.out.println("Sending to API: " + cleanedData); // Print the response JSON
-		connection.getOutputStream().write(cleanedData.getBytes());
+
+		System.out.println("Sending to API: " + data); // Print the response JSON
+		connection.getOutputStream().write(data.getBytes());
 
         int responseCode = connection.getResponseCode();
 
@@ -241,14 +341,15 @@ public class OpenAIAPIClient {
         reader.close();
 
         String resp = response.toString();
-		System.out.println("Response JSON: " + resp); // Print the response JSON
+//		System.out.println("Response JSON: " + resp); // Print the response JSON
 
         return resp;
     }
 
     public static String callDavinciAPI(String prompt, String apiKey) throws IOException {
-        String data = "{\"prompt\": \"" + escapeNewLines(prompt) + "\"}";
-        return callOpenAIAPI(DAVINCI_API_URL, data, apiKey);
+        String data = "{\"prompt\": \"" + scrubData(prompt) + "\"}";
+		String response = callOpenAIAPI(DAVINCI_API_URL, data, apiKey);
+        return response;
     }
 
     public static List<List<Float>> callEmbeddingAPI(String[] inputs, String apiKey) throws IOException {
@@ -291,6 +392,13 @@ public class OpenAIAPIClient {
     private static String escapeNewLines(String text) {
         return text.replace("\n", "\\n");
     }
+
+	private static String scrubData(String data) {
+		String cleanedData = cleanHtml(data);
+		cleanedData = cleanSpecialCharacters(cleanedData);
+		cleanedData = escapeQuotes(cleanedData)
+		return cleanedData;
+	}
 	
     private static String cleanHtml(String html) {
         Document dirtyDocument = Jsoup.parse(html);
@@ -298,15 +406,31 @@ public class OpenAIAPIClient {
         return cleanDocument.body().html();
     }
 
+	private static String cleanSpecialCharacters(String text) {
+		def ret = StringUtils.remove(text, '-'); // Remove "-"
+//		ret = StringUtils.remove(ret, ':'); // Remove ":"
+	    return ret
+	}
+	
+	private static String escapeQuotes(String input) {
+		return input.replace("\"", "\\\"");
+	}
+	
     private static String buildInputJson(String[] inputs) {
-        StringBuilder json = new StringBuilder("[");
+        StringBuilder json = new StringBuilder();
         for (int i = 0; i < inputs.length; i++) {
-            json.append("\"").append(inputs[i]).append("\"");
-            if (i != inputs.length - 1) {
-                json.append(", ");
-            }
+        def str = scrubData(inputs[i])
+
+        // Skip empty or whitespace entries
+        if (str == null || str.trim().isEmpty()) {
+            continue;
         }
-        json.append("]");
+        if (json.length() > 0) {
+            json.append(", ");
+        }
+        json.append("\"").append(str).append("\"");
+		}
+        json.insert(0, "[").append("]");
         return json.toString();
     }
 }
