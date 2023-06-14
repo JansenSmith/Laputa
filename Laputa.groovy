@@ -3,14 +3,61 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import com.neuronrobotics.bowlerstudio.BowlerKernel
+import com.neuronrobotics.bowlerstudio.BowlerStudio
+import com.neuronrobotics.bowlerstudio.BowlerStudioController
+import com.neuronrobotics.bowlerstudio.scripting.ScriptingEngine
+import javafx.scene.control.TextInputDialog
+import java.nio.file.Files
+import java.nio.file.Paths
 
 public class QAPatternExample {
 
     public static void main(String[] args) throws IOException {
         String question = "What does shot scraper do?";
         String keyLocation = ScriptingEngine.getWorkspace().getAbsolutePath()+"/gpt-key.txt"
-
-        String apiKey = "YOUR_OPENAI_API_KEY";
+		if(!new File(keyLocation).exists()) {
+			BowlerStudio.runLater({
+				TextInputDialog dialog = new TextInputDialog("your OpenAI API Key here");
+				dialog.setTitle("Enter your OpenAI Key");
+				dialog.setHeaderText("Create key here - https://platform.openai.com/account/api-keys");
+				dialog.setContentText("Please enter your key:");
+		
+				// Traditional way to get the response value.
+				Optional<String> result = dialog.showAndWait();
+				if (result.isPresent()){
+					String resultGet = result.get()
+					System.out.println("Your key: " + resultGet);
+					new Thread({
+						try {
+							File myObj = new File(keyLocation);
+							if (myObj.createNewFile()) {
+								System.out.println("File created: " + myObj.getName());
+							} else {
+								System.out.println("File already exists.");
+							}
+							FileWriter myWriter = new FileWriter(keyLocation);
+							myWriter.write(resultGet);
+							myWriter.close();
+							System.out.println("Successfully wrote key to your local file.");
+						} catch (IOException e) {
+							System.out.println("An error occurred.");
+							e.printStackTrace();
+						}
+		
+		
+					}).start()
+				}
+		
+			})
+			return;
+		}
+		
+		
+		println "Loading API key from "+keyLocation
+		String apiKey = new String(Files.readAllBytes(Paths.get(keyLocation)));
+		println "API key: "+apiKey
+        apiKey = "YOUR_OPENAI_API_KEY";
 
         // Step 1: Run a search query to find relevant content
         String searchResults = runSearchQuery(question);
