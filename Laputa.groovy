@@ -86,39 +86,60 @@ public class QAPatternExample {
         return searchResults + "\n\nGiven the above content, answer the following question: " + question;
     }
 
-// ...
 
 	private static String callOpenAIAPI(String prompt, String apiKey) throws IOException {
-	    URL url = new URL("https://api.openai.com/v1/engines/davinci-codex/completions");
-	    HttpURLConnection connection = (HttpURLConnection) url.openConnection();
-	    connection.setRequestMethod("POST");
-	    connection.setRequestProperty("Content-Type", "application/json");
-	    connection.setRequestProperty("Authorization", "Bearer " + apiKey);
-	    connection.setDoOutput(true);
-	    
-	    int responseCode = connection.getResponseCode();
-	    System.out.println("Response Code: " + responseCode);
-	
-	    BufferedReader reader;
-	    if (responseCode >= 400) {
-	        reader = new BufferedReader(new InputStreamReader(connection.getErrorStream()));
-	    } else {
-	        reader = new BufferedReader(new InputStreamReader(connection.getInputStream()));
-	    }
-	
-	    StringBuilder response = new StringBuilder();
-	    String line;
-	    while ((line = reader.readLine()) != null) {
-	        response.append(line);
-	    }
-	    reader.close();
+		URL url = new URL("https://api.openai.com/v1/engines/davinci-codex/completions");
+		HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+		connection.setRequestMethod("POST");
+		connection.setRequestProperty("Content-Type", "application/json");
+		connection.setRequestProperty("Authorization", "Bearer " + apiKey);
+		connection.setDoOutput(true);
+		
+		//String data = "{\"prompt\": \"" + prompt + "\", \"max_tokens\": 100}";
+		String data = "{\"prompt\": \"" + prompt + "}";
+		connection.getOutputStream().write(data.getBytes());
+
+		BufferedReader reader = new BufferedReader(new InputStreamReader(connection.getInputStream()));
+		StringBuilder response = new StringBuilder();
+		String line;
+		while ((line = reader.readLine()) != null) {
+			response.append(line);
+		}
+		reader.close();
 	
 	    System.out.println("Response Body: " + response.toString());
-	    
-	    return response.toString();
+
+		return response.toString();
 	}
 
-// ...
+//	private static String callOpenAIAPI(String prompt, String apiKey) throws IOException {
+//	    URL url = new URL("https://api.openai.com/v1/engines/davinci-codex/completions");
+//	    HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+//	    connection.setRequestMethod("POST");
+//	    connection.setRequestProperty("Content-Type", "application/json");
+//	    connection.setRequestProperty("Authorization", "Bearer " + apiKey);
+//	    connection.setDoOutput(true);
+//	    
+//	    int responseCode = connection.getResponseCode();
+//	    System.out.println("Response Code: " + responseCode);
+//	
+//	    BufferedReader reader;
+//	    if (responseCode >= 400) {
+//	        reader = new BufferedReader(new InputStreamReader(connection.getErrorStream()));
+//	    } else {
+//	        reader = new BufferedReader(new InputStreamReader(connection.getInputStream()));
+//	    }
+//	
+//	    StringBuilder response = new StringBuilder();
+//	    String line;
+//	    while ((line = reader.readLine()) != null) {
+//	        response.append(line);
+//	    }
+//	    reader.close();
+//	    
+//	    return response.toString();
+//	}
+
 
 
     private static String processAnswer(String answer) {
