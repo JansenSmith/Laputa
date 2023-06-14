@@ -96,10 +96,20 @@ public class QAPatternExample {
 		connection.setDoOutput(true);
 		
 		//String data = "{\"prompt\": \"" + prompt + "\", \"max_tokens\": 100}";
-		String data = "{\"prompt\": \"" + prompt + "}";
+		String data = "{\"prompt\": \"" + prompt + "\"}";
+		System.out.println("JSON Data: " + data);
 		connection.getOutputStream().write(data.getBytes());
+		
+	    int responseCode = connection.getResponseCode();
+	    System.out.println("Response Code: " + responseCode);
+		
+	    BufferedReader reader;
+	    if (responseCode >= 400) {
+	        reader = new BufferedReader(new InputStreamReader(connection.getErrorStream()));
+	    } else {
+	        reader = new BufferedReader(new InputStreamReader(connection.getInputStream()));
+	    }
 
-		BufferedReader reader = new BufferedReader(new InputStreamReader(connection.getInputStream()));
 		StringBuilder response = new StringBuilder();
 		String line;
 		while ((line = reader.readLine()) != null) {
@@ -107,39 +117,10 @@ public class QAPatternExample {
 		}
 		reader.close();
 	
-	    System.out.println("Response Body: " + response.toString());
+	    	System.out.println("Response Body: " + response.toString());
 
 		return response.toString();
 	}
-
-//	private static String callOpenAIAPI(String prompt, String apiKey) throws IOException {
-//	    URL url = new URL("https://api.openai.com/v1/engines/davinci-codex/completions");
-//	    HttpURLConnection connection = (HttpURLConnection) url.openConnection();
-//	    connection.setRequestMethod("POST");
-//	    connection.setRequestProperty("Content-Type", "application/json");
-//	    connection.setRequestProperty("Authorization", "Bearer " + apiKey);
-//	    connection.setDoOutput(true);
-//	    
-//	    int responseCode = connection.getResponseCode();
-//	    System.out.println("Response Code: " + responseCode);
-//	
-//	    BufferedReader reader;
-//	    if (responseCode >= 400) {
-//	        reader = new BufferedReader(new InputStreamReader(connection.getErrorStream()));
-//	    } else {
-//	        reader = new BufferedReader(new InputStreamReader(connection.getInputStream()));
-//	    }
-//	
-//	    StringBuilder response = new StringBuilder();
-//	    String line;
-//	    while ((line = reader.readLine()) != null) {
-//	        response.append(line);
-//	    }
-//	    reader.close();
-//	    
-//	    return response.toString();
-//	}
-
 
 
     private static String processAnswer(String answer) {
