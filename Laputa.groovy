@@ -41,6 +41,8 @@ import org.apache.http.Header;
 import org.apache.http.util.EntityUtils;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
+import org.jsoup.safety.Cleaner;
+import org.jsoup.safety.Whitelist;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 
@@ -49,6 +51,7 @@ import org.jsoup.select.Elements;
 public class QAPatternExample {
 
     public static void main(String[] args) throws IOException {
+		System.out.println("reached here")
         String question = "What is a CSG file?";
 		
 		// Look for or save OpenAI API key
@@ -59,26 +62,59 @@ public class QAPatternExample {
 		}
 		
 		
-		println "Loading API key from "+keyLocation
+		System.out.println("Loading API key from "+keyLocation)
 		String apiKey = new String(Files.readAllBytes(Paths.get(keyLocation)));
 		//println "API key: "+apiKey
 		
 		// Step 1: Download documentation in markdown format
 		String linkToDocumentation = "https://github.com/CommonWealthRobotics/CommonWealthRobotics.github.io/tree/a0551b55ee1cc64f48c16e08a6f7928e7d6601bd/content/JavaCAD";
-		String savePath = ScriptingEngine.getWorkspace().getAbsolutePath() + File.separator + "documentation"
-		new MarkdownDownloader(linkToDocumentation, savePath)
-
-        // Step 2: Run a search query to find relevant content
-        String searchResults = runSearchQuery(question);
-
-        // Step 3: Extract relevant content and construct the prompt
-        String prompt = constructPrompt(searchResults, question);
-        System.out.println("\nPrompt: \n" + prompt);
-
-        // Step 4: Call the OpenAI API with embeddings
-        String[] inputs = ["input1", "input2", "input3"];
-
-        List<List<Float>> embeddings = OpenAIAPIClient.callEmbeddingAPI(inputs, apiKey);
+		String savePath = ScriptingEngine.getWorkspace().getAbsolutePath() + File.separator + "documentation";
+		//new MarkdownDownloader(linkToDocumentation, savePath);
+		System.out.println("reached here")
+		
+		// Step 2: Iterate through markdown files and get embeddings
+		List<String> inputs = new ArrayList<>();
+		File[] markdownFiles = new File(savePath).listFiles();
+		if (markdownFiles != null) {
+			for (File file : markdownFiles) {
+				if (file.isFile() && file.getName().endsWith(".md")) {
+					String content = new String(Files.readAllBytes(file.toPath()));
+					// Split content into smaller segments if necessary
+					String[] segments = content.split("\\r?\\n\\r?\\n"); // Split by empty lines
+		
+					// Add each segment as an input for embeddings
+					for (String segment : segments) {
+						inputs.add(segment);
+//						System.out.println(segment + "/n")
+					}
+				}
+			}
+		}
+		System.out.println("reached here")
+		
+		// Step 3: Call the OpenAI API with embeddings
+        inputs = ["input1", "input2", "input3"]; // test inputs
+		List<List<Float>> embeddings = OpenAIAPIClient.callEmbeddingAPI(inputs.toArray(new String[0]), apiKey);
+		
+		new Exception("finished").printStackTrace()
+		
+		
+//		// Step 1: Download documentation in markdown format
+//		String linkToDocumentation = "https://github.com/CommonWealthRobotics/CommonWealthRobotics.github.io/tree/a0551b55ee1cc64f48c16e08a6f7928e7d6601bd/content/JavaCAD";
+//		String savePath = ScriptingEngine.getWorkspace().getAbsolutePath() + File.separator + "documentation"
+//		new MarkdownDownloader(linkToDocumentation, savePath)
+//
+//        // Step 2: Run a search query to find relevant content
+//        String searchResults = runSearchQuery(question);
+//
+//        // Step 3: Extract relevant content and construct the prompt
+//        String prompt = constructPrompt(searchResults, question);
+//        System.out.println("\nPrompt: \n" + prompt);
+//
+//        // Step 4: Call the OpenAI API with embeddings
+//        String[] inputs = ["input1", "input2", "input3"];
+//
+//        List<List<Float>> embeddings = OpenAIAPIClient.callEmbeddingAPI(inputs, apiKey);
 
 //        System.out.println("Embeddings:");
 //        for (List<Float> embedding : embeddings) {
@@ -182,8 +218,11 @@ public class OpenAIAPIClient {
         connection.setRequestProperty("Content-Type", "application/json");
         connection.setRequestProperty("Authorization", "Bearer " + apiKey);
         connection.setDoOutput(true);
-
-        connection.getOutputStream().write(data.getBytes());
+		
+		// Scrub HTML tags from the data
+		String cleanedData = cleanHtml(data);
+		System.out.println("Sending to API: " + cleanedData); // Print the response JSON
+		connection.getOutputStream().write(cleanedData.getBytes());
 
         int responseCode = connection.getResponseCode();
 
@@ -202,6 +241,7 @@ public class OpenAIAPIClient {
         reader.close();
 
         String resp = response.toString();
+		System.out.println("Response JSON: " + resp); // Print the response JSON
 
         return resp;
     }
@@ -250,6 +290,12 @@ public class OpenAIAPIClient {
 
     private static String escapeNewLines(String text) {
         return text.replace("\n", "\\n");
+    }
+	
+    private static String cleanHtml(String html) {
+        Document dirtyDocument = Jsoup.parse(html);
+        Document cleanDocument = new Cleaner(Whitelist.relaxed()).clean(dirtyDocument);
+        return cleanDocument.body().html();
     }
 
     private static String buildInputJson(String[] inputs) {
@@ -318,11 +364,17 @@ public class MarkdownDownloader {
 	    savePath = savePath + File.separator + fileName;
 	    Path outputFile = Paths.get(savePath);
 	
-	    // Check if the file already exists and looks unchanged
-	    if (Files.exists(outputFile) && isFileUnchanged(outputFile, fileUrl)) {
+	    // Check if the file already exists
+	    if (Files.exists(outputFile)) {
 	        System.out.println("Skipped: " + fileName);
 	        return;
 	    }
+	
+//	    // Check if the file already exists and looks unchanged
+//	    if (Files.exists(outputFile) && isFileUnchanged(outputFile, fileUrl)) {
+//	        System.out.println("Skipped: " + fileName);
+//	        return;
+//	    }
 	
 	    HttpGet request = new HttpGet(fileUrl);
 	    HttpResponse response = null;
