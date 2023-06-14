@@ -1,4 +1,3 @@
-import java.io.*;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -11,9 +10,12 @@ import com.neuronrobotics.bowlerstudio.BowlerStudioController
 import com.neuronrobotics.bowlerstudio.scripting.ScriptingEngine
 import javafx.scene.control.TextInputDialog
 import java.nio.file.Files
+import java.nio.file.Path
 import java.nio.file.Paths
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import java.nio.file.StandardCopyOption
+import java.nio.charset.StandardCharsets;
 import groovy.json.JsonSlurper
 import okhttp3.MediaType;
 import okhttp3.OkHttpClient;
@@ -23,6 +25,24 @@ import okhttp3.Response;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
+import org.apache.http.Header;
+import org.apache.http.entity.ContentType;
+import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.impl.client.HttpClients;
+import org.apache.http.client.methods.HttpHead;
+import org.apache.http.client.utils.URIBuilder
+import org.apache.http.client.methods.HttpGet;
+import org.apache.http.HttpEntity;
+import org.apache.http.HttpResponse;
+import org.apache.http.util.EntityUtils;
+import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.impl.client.HttpClients;
+import org.apache.http.Header;
+import org.apache.http.util.EntityUtils;
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
+import org.jsoup.nodes.Element;
+import org.jsoup.select.Elements;
 
 // inspired by https://simonwillison.net/2023/Jan/13/semantic-search-answers/
 
@@ -42,26 +62,30 @@ public class QAPatternExample {
 		println "Loading API key from "+keyLocation
 		String apiKey = new String(Files.readAllBytes(Paths.get(keyLocation)));
 		//println "API key: "+apiKey
+		
+		// Step 1: Download documentation in markdown format
+		String linkToDocumentation = "https://github.com/CommonWealthRobotics/CommonWealthRobotics.github.io/tree/a0551b55ee1cc64f48c16e08a6f7928e7d6601bd/content/JavaCAD";
+		new MarkdownDownloader(linkToDocumentation)
 
-        // Step 1: Run a search query to find relevant content
+        // Step 2: Run a search query to find relevant content
         String searchResults = runSearchQuery(question);
 
-        // Step 2: Extract relevant content and construct the prompt
+        // Step 3: Extract relevant content and construct the prompt
         String prompt = constructPrompt(searchResults, question);
         System.out.println("\nPrompt: \n" + prompt);
 
-        // Step 3: Call the OpenAI API with embeddings
+        // Step 4: Call the OpenAI API with embeddings
         String[] inputs = ["input1", "input2", "input3"];
 
         List<List<Float>> embeddings = OpenAIAPIClient.callEmbeddingAPI(inputs, apiKey);
 
-        System.out.println("Embeddings:");
-        for (List<Float> embedding : embeddings) {
-        	for (Float emb : embedding) {
-            	System.out.println("found a number");
-            	System.out.println(emb);
-        	}
-        }
+//        System.out.println("Embeddings:");
+//        for (List<Float> embedding : embeddings) {
+//        	for (Float emb : embedding) {
+//            	System.out.println("found a number");
+//            	System.out.println(emb);
+//        	}
+//        }
 //        String answer = OpenAIAPIClient.callDavinciAPI(prompt, apiKey);
 
         // Step 4: Process and display the answer
@@ -240,50 +264,106 @@ public class OpenAIAPIClient {
     }
 }
 
+public class MarkdownDownloader {
+    private CloseableHttpClient httpClient;
+
+    public MarkdownDownloader(String targetSite) {
+        try {
+            httpClient = HttpClients.createDefault();
+            downloadMarkdownFiles(targetSite);
+        } catch (IOException | URISyntaxException e) {
+            e.printStackTrace();
+        } finally {
+            closeHttpClient();
+        }
+    }
+
+    private void closeHttpClient() {
+        try {
+            if (httpClient != null) {
+                httpClient.close();
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void downloadMarkdownFiles(String targetSite) throws IOException, URISyntaxException {
+        URIBuilder uriBuilder = new URIBuilder(targetSite);
+        HttpGet request = new HttpGet(uriBuilder.build());
+        HttpResponse response = httpClient.execute(request);
+        HttpEntity entity = response.getEntity();
+        String htmlContent = EntityUtils.toString(entity);
+        Document document = Jsoup.parse(htmlContent);
+        Elements links = document.select("a[href]");
+        for (Element link : links) {
+            String href = link.attr("href");
+            if (isMarkdownFile(href)) {
+                downloadFile(targetSite + href);
+            }
+        }
+    }
+
+    private boolean isMarkdownFile(String link) {
+        return link.endsWith(".md");
+    }
+
+	private void downloadFile(String fileUrl) throws IOException {
+	    String fileName = fileUrl.substring(fileUrl.lastIndexOf('/') + 1);
+	    String savePath = ScriptingEngine.getWorkspace().getAbsolutePath() + File.separator + "documentation";
+	    Path saveDirectory = Paths.get(savePath);
+	    if (!Files.exists(saveDirectory)) {
+	        Files.createDirectories(saveDirectory);
+	    }
+	    savePath = savePath + File.separator + fileName;
+	    Path outputFile = Paths.get(savePath);
 	
-//public class OpenAIAPIClient {
-//	private static final String DAVINCI_API_URL = "https://api.openai.com/v1/engines/davinci/completions";
-//	private static final String EMBEDDING_API_URL = "https://api.openai.com/v1/embeddings";
-//
-//	private static String callOpenAIAPI(String url, String prompt, String apiKey) throws IOException {
-//		HttpURLConnection connection = (HttpURLConnection) new URL(url).openConnection();
-//		connection.setRequestMethod("POST");
-//		connection.setRequestProperty("Content-Type", "application/json");
-//		connection.setRequestProperty("Authorization", "Bearer " + apiKey);
-//		connection.setDoOutput(true);
-//
-//		String data = "{\"prompt\": \"" + escapeNewLines(prompt) + "\"}";
-//
-//		connection.getOutputStream().write(data.getBytes());
-//
-//		int responseCode = connection.getResponseCode();
-//
-//		BufferedReader reader;
-//		if (responseCode >= 400) {
-//			reader = new BufferedReader(new InputStreamReader(connection.getErrorStream()));
-//		} else {
-//			reader = new BufferedReader(new InputStreamReader(connection.getInputStream()));
-//		}
-//
-//		StringBuilder response = new StringBuilder();
-//		String line;
-//		while ((line = reader.readLine()) != null) {
-//			response.append(line);
-//		}
-//		reader.close();
-//
-//		return response.toString();
-//	}
-//
-//	private static String escapeNewLines(String text) {
-//		return text.replace("\n", "\\n");
-//	}
-//
-//	public static String callDavinciAPI(String prompt, String apiKey) throws IOException {
-//		return callOpenAIAPI(DAVINCI_API_URL, prompt, apiKey);
-//	}
-//
-//	public static String callEmbeddingAPI(String prompt, String apiKey) throws IOException {
-//		return callOpenAIAPI(EMBEDDING_API_URL, prompt, apiKey);
-//	}
-//}
+	    // Check if the file already exists and looks unchanged
+	    if (Files.exists(outputFile) && isFileUnchanged(outputFile, fileUrl)) {
+	        System.out.println("Skipped: " + fileName);
+	        return;
+	    }
+	
+	    HttpGet request = new HttpGet(fileUrl);
+	    HttpResponse response = null;
+	    try {
+	        response = httpClient.execute(request);
+	        HttpEntity entity = response.getEntity();
+	        InputStream inputStream = entity.getContent();
+	        Files.copy(inputStream, outputFile, StandardCopyOption.REPLACE_EXISTING);
+	    } finally {
+	        if (response != null) {
+	            EntityUtils.consumeQuietly(response.getEntity());
+	        }
+	    }
+	    System.out.println("Downloaded: " + fileName);
+	}
+	
+	private boolean isFileUnchanged(Path filePath, String fileUrl) throws IOException {
+		// This feature appears to be broken.
+		
+	    // Check if the file already exists
+	    if (!Files.exists(filePath)) {
+	        return false; // File does not exist, so it is considered changed
+	    }
+	
+	    // Read the content of the local file
+	    String localContent = new String(Files.readAllBytes(filePath), StandardCharsets.UTF_8);
+	
+	    HttpGet request = new HttpGet(fileUrl);
+	    HttpResponse response = null;
+	    try {
+	        response = httpClient.execute(request);
+	        HttpEntity entity = response.getEntity();
+	        String remoteContent = EntityUtils.toString(entity, StandardCharsets.UTF_8);
+	
+	        // Compare the content of the local file with the remote file
+	        return localContent.equals(remoteContent);
+	    } finally {
+	        if (response != null) {
+	            EntityUtils.consumeQuietly(response.getEntity());
+	        }
+	    }
+	}
+
+}
