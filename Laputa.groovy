@@ -65,7 +65,8 @@ public class QAPatternExample {
 		
 		// Step 1: Download documentation in markdown format
 		String linkToDocumentation = "https://github.com/CommonWealthRobotics/CommonWealthRobotics.github.io/tree/a0551b55ee1cc64f48c16e08a6f7928e7d6601bd/content/JavaCAD";
-		new MarkdownDownloader(linkToDocumentation)
+		String savePath = ScriptingEngine.getWorkspace().getAbsolutePath() + File.separator + "documentation"
+		new MarkdownDownloader(linkToDocumentation, savePath)
 
         // Step 2: Run a search query to find relevant content
         String searchResults = runSearchQuery(question);
@@ -267,10 +268,10 @@ public class OpenAIAPIClient {
 public class MarkdownDownloader {
     private CloseableHttpClient httpClient;
 
-    public MarkdownDownloader(String targetSite) {
+    public MarkdownDownloader(String targetSite, String savePath) {
         try {
             httpClient = HttpClients.createDefault();
-            downloadMarkdownFiles(targetSite);
+            downloadMarkdownFiles(targetSite, savePath);
         } catch (IOException | URISyntaxException e) {
             e.printStackTrace();
         } finally {
@@ -288,7 +289,7 @@ public class MarkdownDownloader {
         }
     }
 
-    private void downloadMarkdownFiles(String targetSite) throws IOException, URISyntaxException {
+    private void downloadMarkdownFiles(String targetSite, String savePath) throws IOException, URISyntaxException {
         URIBuilder uriBuilder = new URIBuilder(targetSite);
         HttpGet request = new HttpGet(uriBuilder.build());
         HttpResponse response = httpClient.execute(request);
@@ -299,7 +300,7 @@ public class MarkdownDownloader {
         for (Element link : links) {
             String href = link.attr("href");
             if (isMarkdownFile(href)) {
-                downloadFile(targetSite + href);
+                downloadFile(targetSite + href, savePath);
             }
         }
     }
@@ -308,9 +309,8 @@ public class MarkdownDownloader {
         return link.endsWith(".md");
     }
 
-	private void downloadFile(String fileUrl) throws IOException {
+	private void downloadFile(String fileUrl, String savePath) throws IOException {
 	    String fileName = fileUrl.substring(fileUrl.lastIndexOf('/') + 1);
-	    String savePath = ScriptingEngine.getWorkspace().getAbsolutePath() + File.separator + "documentation";
 	    Path saveDirectory = Paths.get(savePath);
 	    if (!Files.exists(saveDirectory)) {
 	        Files.createDirectories(saveDirectory);
