@@ -32,41 +32,9 @@ public class QAPatternExample {
         String question = "What is a CSG file?";
 		
 		// Look for or save OpenAI API key
-        String keyLocation = ScriptingEngine.getWorkspace().getAbsolutePath()+"/gpt-key.txt"
+        String keyLocation = ScriptingEngine.getWorkspace().getAbsolutePath() + File.separator +"gpt-key.txt"
 		if(!new File(keyLocation).exists()) {
-			BowlerStudio.runLater({
-				TextInputDialog dialog = new TextInputDialog("your OpenAI API Key here");
-				dialog.setTitle("Enter your OpenAI Key");
-				dialog.setHeaderText("Create key here - https://platform.openai.com/account/api-keys");
-				dialog.setContentText("Please enter your key:");
-		
-				// Traditional way to get the response value.
-				Optional<String> result = dialog.showAndWait();
-				if (result.isPresent()){
-					String resultGet = result.get()
-					System.out.println("Your key: " + resultGet);
-					new Thread({
-						try {
-							File myObj = new File(keyLocation);
-							if (myObj.createNewFile()) {
-								System.out.println("File created: " + myObj.getName());
-							} else {
-								System.out.println("File already exists.");
-							}
-							FileWriter myWriter = new FileWriter(keyLocation);
-							myWriter.write(resultGet);
-							myWriter.close();
-							System.out.println("Successfully wrote key to your local file.");
-						} catch (IOException e) {
-							System.out.println("An error occurred.");
-							e.printStackTrace();
-						}
-		
-		
-					}).start()
-				}
-		
-			})
+			KeyDialog(keyLocation)
 			return;
 		}
 		
@@ -87,19 +55,55 @@ public class QAPatternExample {
 
         List<List<Float>> embeddings = OpenAIAPIClient.callEmbeddingAPI(inputs, apiKey);
 
-//        System.out.println("Embeddings:");
-//        for (List<Float> embedding : embeddings) {
-//        	for (Float emb : embedding) {
-//            	System.out.println("found a number");
-//            	System.out.println(emb);
-//        	}
-//        }
+        System.out.println("Embeddings:");
+        for (List<Float> embedding : embeddings) {
+        	for (Float emb : embedding) {
+            	System.out.println("found a number");
+            	System.out.println(emb);
+        	}
+        }
 //        String answer = OpenAIAPIClient.callDavinciAPI(prompt, apiKey);
 
         // Step 4: Process and display the answer
 //        String processedAnswer = processAnswer(answer);
 //        System.out.println("\nProcessed Answer: \n" + processedAnswer);
     }
+
+	private static KeyDialog(String keyLocation) {
+		BowlerStudio.runLater({
+			TextInputDialog dialog = new TextInputDialog("your OpenAI API Key here");
+			dialog.setTitle("Enter your OpenAI Key");
+			dialog.setHeaderText("Create key here - https://platform.openai.com/account/api-keys");
+			dialog.setContentText("Please enter your key:");
+
+			// Traditional way to get the response value.
+			Optional<String> result = dialog.showAndWait();
+			if (result.isPresent()){
+				String resultGet = result.get()
+				System.out.println("Your key: " + resultGet);
+				new Thread({
+					try {
+						File myObj = new File(keyLocation);
+						if (myObj.createNewFile()) {
+							System.out.println("File created: " + myObj.getName());
+						} else {
+							System.out.println("File already exists.");
+						}
+						FileWriter myWriter = new FileWriter(keyLocation);
+						myWriter.write(resultGet);
+						myWriter.close();
+						System.out.println("Successfully wrote key to your local file.");
+					} catch (IOException e) {
+						System.out.println("An error occurred.");
+						e.printStackTrace();
+					}
+
+
+				}).start()
+			}
+
+		})
+	}
 
     private static String runSearchQuery(String question) {
         // Implement your search query logic here
