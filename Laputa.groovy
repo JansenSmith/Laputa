@@ -89,7 +89,7 @@ public class QAPatternExample {
 
 
 	private static String callOpenAIAPI(String prompt, String apiKey) throws IOException {
-		URL url = new URL("https://api.openai.com/v1/engines/davinci-codex/completions");
+		URL url = new URL("https://api.openai.com/v1/engines/davinci/completions");
 		HttpURLConnection connection = (HttpURLConnection) url.openConnection();
 		connection.setRequestMethod("POST");
 		connection.setRequestProperty("Content-Type", "application/json");
