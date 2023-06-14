@@ -10,6 +10,7 @@ import com.neuronrobotics.bowlerstudio.scripting.ScriptingEngine
 import javafx.scene.control.TextInputDialog
 import java.nio.file.Files
 import java.nio.file.Paths
+import groovy.json.JsonSlurper
 
 public class QAPatternExample {
 
@@ -102,7 +103,7 @@ public class QAPatternExample {
 	
 	    // Validate the JSON
 	    try {
-	        new JSONObject(data);
+	        new JsonSlurper().parseText(data);
 	        System.out.println("JSON is valid.");
 	    } catch (Exception e) {
 	        System.out.println("JSON is invalid. Error: " + e.getMessage());
