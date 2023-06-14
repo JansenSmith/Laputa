@@ -134,9 +134,27 @@ public class QAPatternExample {
 	}
 
 
-    private static String processAnswer(String answer) {
-        // Extract and process the answer from the API response
-        // Return the processed answer as a string
-        return "Processed answer: " + answer;
-    }
+	private static String processAnswer(String answer) {
+	    // Extract the answer from the API response
+	    String processedAnswer = "";
+	
+	    try {
+	        // Parse the JSON response
+	        JsonSlurper slurper = new JsonSlurper();
+	        Map<String, Object> responseMap = (Map<String, Object>) slurper.parseText(answer);
+	
+	        // Extract the answer text from the response
+	        List<Map<String, Object>> choices = (List<Map<String, Object>>) responseMap.get("choices");
+	        if (choices != null && !choices.isEmpty()) {
+	            Map<String, Object> answerChoice = choices.get(0);
+	            String text = (String) answerChoice.get("text");
+	            processedAnswer = text.trim();
+	        }
+	    } catch (Exception e) {
+	        e.printStackTrace();
+	    }
+	
+	    return "Processed answer: " + processedAnswer;
+	}
+
 }
