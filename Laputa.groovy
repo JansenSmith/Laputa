@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.util.Base64;
 import com.neuronrobotics.bowlerstudio.BowlerKernel
 import com.neuronrobotics.bowlerstudio.BowlerStudio
 import com.neuronrobotics.bowlerstudio.BowlerStudioController
@@ -191,7 +192,7 @@ public class OpenAIAPIClient {
 
         return embeddings;
     }
-
+	
 	private static String extractBinaryString(String response) {
 	    try {
 	        // Find the start and end index of the binary string
@@ -213,9 +214,23 @@ public class OpenAIAPIClient {
 	        // Remove non-digit characters from the binary string
 	        // binaryString = binaryString.replaceAll("[^\\d.-]+", "");
 	
+	        // Validate the binary string
+	        if (!isValidBase64(binaryString)) {
+	            throw new IllegalArgumentException("Invalid binary string format: contains characters outside the Base64 alphabet.");
+	        }
+	
 	        return binaryString;
 	    } catch (IndexOutOfBoundsException e) {
 	        throw new IllegalArgumentException("Invalid response format: unexpected index out of bounds.", e);
+	    }
+	}
+	
+	private static boolean isValidBase64(String str) {
+	    try {
+	        Base64.getDecoder().decode(str);
+	        return true;
+	    } catch (IllegalArgumentException e) {
+	        return false;
 	    }
 	}
 
