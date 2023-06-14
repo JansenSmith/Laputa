@@ -183,8 +183,8 @@ public class OpenAIAPIClient {
 
         // Extract the binary string from the response
         String binaryString = extractBinaryString(response);
-		System.out.println("Binary String:");
-		System.out.println(binaryString);
+//		System.out.println("Binary String:");
+//		System.out.println(binaryString);
 
         // Decode the binary string to obtain the list of floating-point numbers
         List<Float> embeddings = decodeBinaryString(binaryString);
@@ -193,27 +193,32 @@ public class OpenAIAPIClient {
     }
 
 	private static String extractBinaryString(String response) {
-	    // Find the start and end index of the binary string
-	    int startIndex = response.indexOf("\"embedding\": [") + 14;
-	    int endIndex = response.indexOf("]", startIndex);
+	    try {
+	        // Find the start and end index of the binary string
+	        int startIndex = response.indexOf("\"embedding\": [") + 14;
+	        int endIndex = response.indexOf("]", startIndex);
 	
-	    // Print diagnostic information
-	    System.out.println("Start Index: " + startIndex);
-	    System.out.println("End Index: " + endIndex);
+	        // Check if start and end indices are valid
+	        if (startIndex == -1 || endIndex == -1) {
+	            throw new IllegalArgumentException("Invalid response format: missing \"embedding\" field or closing bracket.");
+	        }
 	
-	    // Extract the substring
-	    String substring = response.substring(startIndex, endIndex);
+	        // Print diagnostic information
+	        System.out.println("Start Index: " + startIndex);
+	        System.out.println("End Index: " + endIndex);
 	
-	    // Print the extracted substring for debugging
-	    System.out.println("Extracted Substring:");
-	    System.out.println(substring);
+	        // Extract the substring
+	        String binaryString = response.substring(startIndex, endIndex);
 	
-	    // Check if the extracted substring contains any invalid characters
-	    boolean containsInvalidChars = substring.matches("[A-Za-z0-9+/=]+");
-	    System.out.println("Contains Invalid Characters: " + !containsInvalidChars);
+	        // Remove non-digit characters from the binary string
+	        // binaryString = binaryString.replaceAll("[^\\d.-]+", "");
 	
-	    return substring;
+	        return binaryString;
+	    } catch (IndexOutOfBoundsException e) {
+	        throw new IllegalArgumentException("Invalid response format: unexpected index out of bounds.", e);
+	    }
 	}
+
 
 
 
