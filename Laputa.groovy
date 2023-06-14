@@ -161,7 +161,7 @@ public class OpenAIAPIClient {
         }
         reader.close();
 
-        resp = response.toString()
+        String resp = response.toString()
 
 	    System.out.println("API Response:");
 	    System.out.println(resp);
