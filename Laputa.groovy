@@ -15,7 +15,14 @@ import java.nio.file.Paths
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import groovy.json.JsonSlurper
-import org.apache.commons.codec.binary.Base64
+import okhttp3.MediaType;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.RequestBody;
+import okhttp3.Response;
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
 
 // inspired by https://simonwillison.net/2023/Jan/13/semantic-search-answers/
 
@@ -78,11 +85,14 @@ public class QAPatternExample {
         // Step 3: Call the OpenAI API with embeddings
         String[] inputs = ["input1", "input2", "input3"];
 
-        List<Float> embeddings = OpenAIAPIClient.callEmbeddingAPI(inputs, apiKey);
+        List<List<Float>> embeddings = OpenAIAPIClient.callEmbeddingAPI(inputs, apiKey);
 
         System.out.println("Embeddings:");
-        for (Float embedding : embeddings) {
-            System.out.println(embedding);
+        for (List<Float> embedding : embeddings) {
+        	for (Float emb : embedding) {
+            	System.out.println("found a number");
+            	System.out.println(emb);
+        	}
         }
 //        String answer = OpenAIAPIClient.callDavinciAPI(prompt, apiKey);
 
@@ -162,10 +172,7 @@ public class OpenAIAPIClient {
         }
         reader.close();
 
-        String resp = response.toString()
-
-//	    System.out.println("API Response:");
-//	    System.out.println(resp);
+        String resp = response.toString();
 
         return resp;
     }
@@ -175,79 +182,42 @@ public class OpenAIAPIClient {
         return callOpenAIAPI(DAVINCI_API_URL, data, apiKey);
     }
 
-    public static List<Float> callEmbeddingAPI(String[] inputs, String apiKey) throws IOException {
+    public static List<List<Float>> callEmbeddingAPI(String[] inputs, String apiKey) throws IOException {
         String data = "{\"input\": " + buildInputJson(inputs) + ", \"model\": \"text-embedding-ada-002\"}";
         String response = callOpenAIAPI(EMBEDDING_API_URL, data, apiKey);
 
-	    //System.out.println("API Response:");
-	    //System.out.println(response);
-
-        // Extract the binary string from the response
-        String binaryString = extractBinaryString(response);
-//		System.out.println("Binary String:");
-//		System.out.println(binaryString);
-
-        // Decode the binary string to obtain the list of floating-point numbers
-        List<Float> embeddings = decodeBinaryString(binaryString);
+        // Extract the embeddings from the response
+        List<List<Float>> embeddings = extractEmbeddings(response);
 
         return embeddings;
     }
-	
-	private static String extractBinaryString(String response) {
-	    try {
-	        // Find the start and end index of the binary string
-	        int startIndex = response.indexOf("\"embedding\": [") + 14;
-	        int endIndex = response.indexOf("]", startIndex);
-	
-	        // Check if start and end indices are valid
-	        if (startIndex == -1 || endIndex == -1) {
-	            throw new IllegalArgumentException("Invalid response format: missing \"embedding\" field or closing bracket.");
-	        }
-	
-	        // Print diagnostic information
-	        System.out.println("Start Index: " + startIndex);
-	        System.out.println("End Index: " + endIndex);
-	
-	        // Extract the substring
-	        String binaryString = response.substring(startIndex, endIndex);
-	
-	        // Remove non-digit characters from the binary string
-	        // binaryString = binaryString.replaceAll("[^\\d.-]+", "");
-	
-	        // Validate the binary string
-	        if (!isValidBase64(binaryString)) {
-	            throw new IllegalArgumentException("Invalid binary string format: contains characters outside the Base64 alphabet.");
-	        }
-	
-	        return binaryString;
-	    } catch (IndexOutOfBoundsException e) {
-	        throw new IllegalArgumentException("Invalid response format: unexpected index out of bounds.", e);
-	    }
-	}
-	
-	private static boolean isValidBase64(String str) {
-	    try {
-	        Base64.getDecoder().decode(str);
-	        return true;
-	    } catch (IllegalArgumentException e) {
-	        return false;
-	    }
-	}
 
+    private static List<List<Float>> extractEmbeddings(String response) {
+        try {
+            JSONObject jsonResponse = new JSONObject(response);
+            JSONArray data = jsonResponse.getJSONArray("data");
 
+            List<List<Float>> embeddings = new ArrayList<>();
 
+            for (int i = 0; i < data.length(); i++) {
+                JSONObject embeddingObj = data.getJSONObject(i);
+                JSONArray embeddingArray = embeddingObj.getJSONArray("embedding");
 
-	private static List<Float> decodeBinaryString(String binaryString) {
-	    byte[] binaryData = binaryString.decodeBase64()
-	    ByteBuffer buffer = ByteBuffer.wrap(binaryData)
-	    buffer.order(ByteOrder.LITTLE_ENDIAN)
-	
-	    List<Float> embeddings = []
-	    while (buffer.hasRemaining()) {
-	        embeddings.add(buffer.getFloat())
-	    }
-	    return embeddings
-	}
+                List<Float> embedding = new ArrayList<>();
+
+                for (int j = 0; j < embeddingArray.length(); j++) {
+                    float value = (float) embeddingArray.getDouble(j);
+                    embedding.add(value);
+                }
+
+                embeddings.add(embedding);
+            }
+
+            return embeddings;
+        } catch (JSONException e) {
+            throw new IllegalArgumentException("Invalid response format: " + e.getMessage());
+        }
+    }
 
     private static String escapeNewLines(String text) {
         return text.replace("\n", "\\n");
