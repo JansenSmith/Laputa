@@ -56,7 +56,7 @@ public class QAPatternExample {
 		
 		println "Loading API key from "+keyLocation
 		String apiKey = new String(Files.readAllBytes(Paths.get(keyLocation)));
-		println "API key: "+apiKey
+		//println "API key: "+apiKey
         apiKey = "YOUR_OPENAI_API_KEY";
 
         // Step 1: Run a search query to find relevant content
