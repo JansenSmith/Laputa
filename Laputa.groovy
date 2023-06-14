@@ -12,6 +12,8 @@ import java.nio.file.Files
 import java.nio.file.Paths
 import groovy.json.JsonSlurper
 
+// inspired by https://simonwillison.net/2023/Jan/13/semantic-search-answers/
+
 public class QAPatternExample {
 
     public static void main(String[] args) throws IOException {
@@ -64,14 +66,14 @@ public class QAPatternExample {
 
         // Step 2: Extract relevant content and construct the prompt
         String prompt = constructPrompt(searchResults, question);
-        System.out.println("Prompt:: " + prompt);
+        System.out.println("\nPrompt: \n" + prompt);
 
         // Step 3: Call the OpenAI API with the prompt
-        String answer = callOpenAIAPI(prompt, apiKey);
+        String answer = OpenAIAPIClient.callDavinciAPI(prompt, apiKey);
 
         // Step 4: Process and display the answer
         String processedAnswer = processAnswer(answer);
-        System.out.println("Answer: " + processedAnswer);
+        System.out.println("\nProcessed Answer: \n" + processedAnswer);
     }
 
     private static String runSearchQuery(String question) {
@@ -88,50 +90,99 @@ public class QAPatternExample {
     }
 
 
-	private static String callOpenAIAPI(String prompt, String apiKey) throws IOException {
-		URL url = new URL("https://api.openai.com/v1/engines/davinci/completions");
-		HttpURLConnection connection = (HttpURLConnection) url.openConnection();
-		connection.setRequestMethod("POST");
-		connection.setRequestProperty("Content-Type", "application/json");
-		connection.setRequestProperty("Authorization", "Bearer " + apiKey);
-		connection.setDoOutput(true);
-		
-		//String data = "{\"prompt\": \"" + prompt + "\", \"max_tokens\": 100}";
-	    String promptWithEscapes = prompt.replace("\n", "\\n");
-	    String data = "{\"prompt\": \"" + promptWithEscapes + "\"}";
-	    System.out.println("JSON Data: " + data);
 	
-	    // Validate the JSON
-	    try {
-	        new JsonSlurper().parseText(data);
-	        System.out.println("JSON is valid.");
-	    } catch (Exception e) {
-	        System.out.println("JSON is invalid. Error: " + e.getMessage());
-	    }
+	public class OpenAIAPIClient {
+		private static final String DAVINCI_API_URL = "https://api.openai.com/v1/engines/davinci/completions";
+		private static final String EMBEDDING_API_URL = "https://api.openai.com/v1/embeddings";
 	
-	    connection.getOutputStream().write(data.getBytes());
-		
-	    int responseCode = connection.getResponseCode();
-	    System.out.println("Response Code: " + responseCode);
-		
-	    BufferedReader reader;
-	    if (responseCode >= 400) {
-	        reader = new BufferedReader(new InputStreamReader(connection.getErrorStream()));
-	    } else {
-	        reader = new BufferedReader(new InputStreamReader(connection.getInputStream()));
-	    }
-
-		StringBuilder response = new StringBuilder();
-		String line;
-		while ((line = reader.readLine()) != null) {
-			response.append(line);
+		private static String callOpenAIAPI(String url, String prompt, String apiKey) throws IOException {
+			HttpURLConnection connection = (HttpURLConnection) new URL(url).openConnection();
+			connection.setRequestMethod("POST");
+			connection.setRequestProperty("Content-Type", "application/json");
+			connection.setRequestProperty("Authorization", "Bearer " + apiKey);
+			connection.setDoOutput(true);
+	
+			String data = "{\"prompt\": \"" + escapeNewLines(prompt) + "\"}";
+	
+			connection.getOutputStream().write(data.getBytes());
+	
+			int responseCode = connection.getResponseCode();
+	
+			BufferedReader reader;
+			if (responseCode >= 400) {
+				reader = new BufferedReader(new InputStreamReader(connection.getErrorStream()));
+			} else {
+				reader = new BufferedReader(new InputStreamReader(connection.getInputStream()));
+			}
+	
+			StringBuilder response = new StringBuilder();
+			String line;
+			while ((line = reader.readLine()) != null) {
+				response.append(line);
+			}
+			reader.close();
+	
+			return response.toString();
 		}
-		reader.close();
 	
-	    	System.out.println("Response Body: " + response.toString());
-
-		return response.toString();
+		private static String escapeNewLines(String text) {
+			return text.replace("\n", "\\n");
+		}
+	
+		public static String callDavinciAPI(String prompt, String apiKey) throws IOException {
+			return callOpenAIAPI(DAVINCI_API_URL, prompt, apiKey);
+		}
+	
+		public static String callEmbeddingAPI(String prompt, String apiKey) throws IOException {
+			return callOpenAIAPI(EMBEDDING_API_URL, prompt, apiKey);
+		}
 	}
+	
+	
+//	private static String callOpenAIAPI(String prompt, String apiKey) throws IOException {
+//		URL url = new URL("https://api.openai.com/v1/engines/davinci/completions");
+//		HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+//		connection.setRequestMethod("POST");
+//		connection.setRequestProperty("Content-Type", "application/json");
+//		connection.setRequestProperty("Authorization", "Bearer " + apiKey);
+//		connection.setDoOutput(true);
+//		
+//		//String data = "{\"prompt\": \"" + prompt + "\", \"max_tokens\": 100}";
+//	    String promptWithEscapes = prompt.replace("\n", "\\n");
+//	    String data = "{\"prompt\": \"" + promptWithEscapes + "\"}";
+//	    //System.out.println("JSON Data: " + data);
+//	
+//	    // Validate the JSON
+//	    try {
+//	        new JsonSlurper().parseText(data);
+//	        //System.out.println("JSON is valid.");
+//	    } catch (Exception e) {
+//	        System.out.println("JSON is invalid. Error: " + e.getMessage());
+//	    }
+//	
+//	    connection.getOutputStream().write(data.getBytes());
+//		
+//	    int responseCode = connection.getResponseCode();
+//	    //System.out.println("Response Code: " + responseCode);
+//		
+//	    BufferedReader reader;
+//	    if (responseCode >= 400) {
+//	        reader = new BufferedReader(new InputStreamReader(connection.getErrorStream()));
+//	    } else {
+//	        reader = new BufferedReader(new InputStreamReader(connection.getInputStream()));
+//	    }
+//
+//		StringBuilder response = new StringBuilder();
+//		String line;
+//		while ((line = reader.readLine()) != null) {
+//			response.append(line);
+//		}
+//		reader.close();
+//	
+//	    	//System.out.println("Response Body: " + response.toString());
+//
+//		return response.toString();
+//	}
 
 
 	private static String processAnswer(String answer) {
@@ -154,7 +205,7 @@ public class QAPatternExample {
 	        e.printStackTrace();
 	    }
 	
-	    return "Processed answer: " + processedAnswer;
+	    return processedAnswer;
 	}
 
 }
