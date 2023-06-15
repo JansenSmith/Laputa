@@ -9,14 +9,18 @@ import com.neuronrobotics.bowlerstudio.BowlerStudio
 import com.neuronrobotics.bowlerstudio.BowlerStudioController
 import com.neuronrobotics.bowlerstudio.scripting.ScriptingEngine
 import javafx.scene.control.TextInputDialog
+import javafx.scene.layout.BorderPane
+import javafx.scene.layout.HBox
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import java.nio.MappedByteBuffer
+import java.nio.channels.FileChannel
 import java.nio.file.StandardCopyOption
 import java.nio.charset.StandardCharsets;
-import groovy.json.JsonSlurper
+import groovy.json.JsonSlurper;
 import okhttp3.MediaType;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
@@ -55,13 +59,23 @@ import java.util.List;
 import java.util.Map;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import javafx.application.Application;
+import javafx.scene.Scene;
+import javafx.scene.control.Tab;
+import javafx.scene.control.TabPane;
+import javafx.scene.control.TextArea
+import javafx.scene.web.WebView;
+import javafx.stage.Stage;
+import java.util.Comparator
+import java.util.PriorityQueue
 
 // inspired by https://simonwillison.net/2023/Jan/13/semantic-search-answers/
 
 public class QAPatternExample {
 
     public static void main(String[] args) throws IOException {
-        String question = "How do i make a box?";
+        //String question = "How do i make a cube?";
+		String question = QuestionDialog();
 		System.out.println("Question: "+ question)
 		
 		
@@ -79,31 +93,56 @@ public class QAPatternExample {
 		List<String> questionSegments = getSegmentsFromString(question);
 		List<Float> questionEmbeddings = getEmbeddings(questionSegments, apiKey);
 		
-		// Step 3: Download documentation in markdown format
+		// Step 3: Download documentation
 		String linkToDocumentation = "https://github.com/CommonWealthRobotics/CommonWealthRobotics.github.io/tree/a0551b55ee1cc64f48c16e08a6f7928e7d6601bd/content/JavaCAD";
 		String savePath = ScriptingEngine.getWorkspace().getAbsolutePath() + File.separator + "documentation";
 		//new MarkdownDownloader(linkToDocumentation, savePath);
+		//new GistDownloader(linkToDocumentation, savePath);
 		
-		// Step 4: Iterate through markdown files, get embeddings, and cache locally
-		List<File> markdownFiles = getMarkdownFiles(savePath);
-		Map<File, List<Float>> embeddingsMap = getEmbeddingsMap(markdownFiles, apiKey);
+		// Step 4: Iterate through documentation files, get embeddings, and cache locally
+		List<File> files = getFiles(savePath);
+		Map<File, List<Float>> embeddingsMap = getEmbeddingsMap(files, savePath, apiKey); // pass savePath to search the cache for new files
 
 	    // Step 5: Calculate similarity between question embeddings and markdown file embeddings
 		Map<File, Float> similarityMap = calculateSimilarity(questionEmbeddings, embeddingsMap);
 	
-	    // Step 6: Find the most similar file
-		File mostSimilarFile = findMostSimilarFile(similarityMap, true);
+	    // Step 6: Find the N most similar files
+		List<File> mostSimilarFiles = findNMostSimilarFiles(similarityMap, 2, true);
 		
 		// Step 7: Construct the prompt for the OpenAI API call
-		String prompt = constructPrompt(mostSimilarFile, question);
+		String prompt = constructPrompt(mostSimilarFiles, question);
 
 		// Step 8: Call the OpenAI API to get the answer
 		String answer = OpenAIAPIClient.callDavinciAPI(prompt, apiKey);
 
 		// Step 9: Process and display the answer
 		System.out.println("Answer:" + answer);
+        Tab t = new Tab("Laputa");
+        HBox content = new HBox();
+        content.getChildren().add(new TextArea(answer));
+        t.setContent(content);
+        BowlerStudioController.addObject(t, null);
 		
     }
+	
+	public void close() {
+		//capture.release();
+		BowlerStudioController.removeObject(t)
+		println "Clean Exit"
+	}
+	
+	private static List<File> getFiles(String savePath) {
+		List<File> markdownFiles = getMarkdownFiles(savePath);
+		List<File> gistFiles = getGistFiles(savePath);
+		List<File> javaFiles = getJavaFiles(savePath);
+	
+		List<File> files = new ArrayList<>();
+		files.addAll(markdownFiles);
+		files.addAll(gistFiles);
+		files.addAll(javaFiles);
+	
+		return files;
+	}
 	
 	private static List<File> getMarkdownFiles(String savePath) {
 		List<File> markdownFiles = new ArrayList<>();
@@ -118,6 +157,36 @@ public class QAPatternExample {
 		}
 
 		return markdownFiles;
+	}
+	
+	private static List<File> getGistFiles(String savePath) {
+		List<File> gistFiles = new ArrayList<>();
+		File[] files = new File(savePath).listFiles();
+	
+		if (files != null) {
+			for (File file : files) {
+				if (file.isFile() && file.getName().endsWith(".groovy")) {
+					gistFiles.add(file);
+				}
+			}
+		}
+	
+		return gistFiles;
+	}
+	
+	private static List<File> getJavaFiles(String savePath) {
+		List<File> javaFiles = new ArrayList<>();
+		File[] files = new File(savePath).listFiles();
+	
+		if (files != null) {
+			for (File file : files) {
+				if (file.isFile() && file.getName().endsWith(".java")) {
+					javaFiles.add(file);
+				}
+			}
+		}
+	
+		return javaFiles;
 	}
 	
 	private static String readFileContent(File file) throws IOException {
@@ -161,18 +230,108 @@ public class QAPatternExample {
 	    return flattenedEmbeddings;
 	}
 	
-	private static Map<File, List<Float>> getEmbeddingsMap(List<File> markdownFiles, String apiKey) {
-		Map<File, List<Float>> embeddingsMap = new HashMap<>();
+	private static Map<File, List<Float>> getEmbeddingsMap(List<File> files, String savePath, String apiKey) {
+	    File saveFile = new File(savePath, "embeddingsMap.ser");
+	    Map<File, List<Float>> embeddingsMap = new HashMap<>();
 	
-		for (File file : markdownFiles) {
-			List<String> segments = getSegmentsFromFile(file);
-			List<Float> embeddings = getEmbeddings(segments, apiKey);
-			embeddingsMap.put(file, embeddings);
-			// cacheEmbeddings(file, embeddings); // TODO - implement
-		}
+	    // Load cache from file if it exists
+	    Map<File, List<Float>> cache = loadCacheFromFile(saveFile);
 	
-		return embeddingsMap;
+	    for (File file : files) {
+	        if (cache.containsKey(file)) {
+	            System.out.println("Using cached embeddings for file: " + file.getName());
+	            embeddingsMap.put(file, cache.get(file));
+	        } else {
+	            System.out.println("Embedding file: " + file.getName()); // Print the file name
+	            List<String> segments = getSegmentsFromFile(file);
+	            try {
+	                List<Float> embeddings = getEmbeddings(segments, apiKey);
+	                embeddingsMap.put(file, embeddings);
+	            } catch (Exception e) {
+	                System.err.println("Failed to get embeddings for file: " + file.getName());
+	                e.printStackTrace();
+	                // Skip the file and continue with the next one
+	            }
+	        }
+	    }
+	
+	    // Save updated embeddingsMap to cache file if there are changes
+	    if (!cache.equals(embeddingsMap)) {
+	        saveCacheToFile(embeddingsMap, saveFile);
+	    }
+	
+	    return embeddingsMap;
 	}
+	
+//	private static Map<File, List<Float>> loadCacheFromFile(File saveFile) {
+//	    try {
+//	        RandomAccessFile file = new RandomAccessFile(saveFile, "r");
+//	        FileChannel channel = file.getChannel();
+//	        MappedByteBuffer buffer = channel.map(FileChannel.MapMode.READ_ONLY, 0, channel.size());
+//	        return (Map<File, List<Float>>) new ObjectInputStream(new ByteArrayInputStream(buffer.array())).readObject();
+//	    } catch (Exception e) {
+//	        System.out.println("Cache file not found. Creating a new cache.");
+//	        return new HashMap<>();
+//	    }
+//	}
+//	
+//	private static void saveCacheToFile(Map<File, List<Float>> cache, File saveFile) {
+//	    try {
+//	        RandomAccessFile file = new RandomAccessFile(saveFile, "rw");
+//	        FileChannel channel = file.getChannel();
+//	        ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+//	        ObjectOutputStream objectOutputStream = new ObjectOutputStream(byteArrayOutputStream);
+//	        objectOutputStream.writeObject(cache);
+//	        objectOutputStream.flush();
+//	        ByteBuffer buffer = ByteBuffer.wrap(byteArrayOutputStream.toByteArray());
+//	        channel.write(buffer);
+//	        System.out.println("Cache saved to file: " + saveFile.getName());
+//	    } catch (Exception e) {
+//	        System.out.println("Failed to save cache to file: " + saveFile.getName());
+//	    }
+//	}
+
+
+	private static Map<File, List<Float>> loadCacheFromFile(File saveFile) {
+	    try {
+	        FileInputStream fileInputStream = new FileInputStream(saveFile);
+	        ObjectInputStream objectInputStream = new ObjectInputStream(fileInputStream);
+	        Map<File, List<Float>> cache = (Map<File, List<Float>>) objectInputStream.readObject();
+	        objectInputStream.close();
+	        fileInputStream.close();
+	        return cache;
+	    } catch (Exception e) {
+	        System.out.println("Cache file not found. Creating a new cache.");
+	        return new HashMap<>(); // Return an empty cache if the file doesn't exist or there's an error
+	    }
+	}
+
+	private static void saveCacheToFile(Map<File, List<Float>> cache, File saveFile) {
+	    try {
+	        FileOutputStream fileOutputStream = new FileOutputStream(saveFile);
+	        ObjectOutputStream objectOutputStream = new ObjectOutputStream(fileOutputStream);
+	        objectOutputStream.writeObject(cache);
+	        objectOutputStream.close();
+	        fileOutputStream.close();
+	        System.out.println("Cache saved to file: " + saveFile.getName());
+	    } catch (Exception e) {
+	        System.out.println("Failed to save cache to file: " + saveFile.getName());
+	    }
+	}
+
+	
+//	private static Map<File, List<Float>> getEmbeddingsMap(List<File> files, String apiKey) {
+//		Map<File, List<Float>> embeddingsMap = new HashMap<>();
+//	
+//		for (File file : files) {
+//			System.out.println("Processing file: " + file.getName()); // Print the file name
+//			List<String> segments = getSegmentsFromFile(file);
+//			List<Float> embeddings = getEmbeddings(segments, apiKey);
+//			embeddingsMap.put(file, embeddings);
+//		}
+//	
+//		return embeddingsMap;
+//	}
 	
 	private static Map<File, Float> calculateSimilarity(List<Float> questionEmbeddings, Map<File, List<Float>> embeddingsMap) {
 		Map<File, Float> similarityMap = new HashMap<>();
@@ -187,29 +346,63 @@ public class QAPatternExample {
 		return similarityMap;
 	}
 	
-	private static File findMostSimilarFile(Map<File, Float> similarityMap, boolean print) {
-		File mostSimilarFile = null;
-		float highestSimilarity = -1;
+	private static List<File> findNMostSimilarFiles(Map<File, Float> similarityMap, int n, boolean print) {
+	    List<File> mostSimilarFiles = new ArrayList<>()
 	
-		for (Map.Entry<File, Float> entry : similarityMap.entrySet()) {
-			File file = entry.getKey();
-			float similarity = entry.getValue();
-			if (similarity > highestSimilarity) {
-				highestSimilarity = similarity;
-				mostSimilarFile = file;
-			}
-		}
-		
-		if(print) {
-			if (mostSimilarFile != null) {
-				System.out.println("Most similar file: " + mostSimilarFile.getName());
-			} else {
-				System.out.println("No similar file found.");
-			}
-		}
+	    PriorityQueue<Map.Entry<File, Float>> priorityQueue = new PriorityQueue<>(
+	            n,
+	            { a, b -> b.value.compareTo(a.value) }
+	    )
 	
-		return mostSimilarFile;
+	    similarityMap.each { entry ->
+	        priorityQueue.offer(entry)
+	        if (priorityQueue.size() > n) {
+	            priorityQueue.poll()
+	        }
+	    }
+	
+	    while (!priorityQueue.isEmpty()) {
+	        File file = priorityQueue.poll().key
+	        mostSimilarFiles.add(file)
+	    }
+	
+	    if (print) {
+	        if (!mostSimilarFiles.isEmpty()) {
+	            println "Most similar files:"
+	            mostSimilarFiles.each { file ->
+	                println file.getName()
+	            }
+	        } else {
+	            println "No similar files found."
+	        }
+	    }
+	
+	    mostSimilarFiles
 	}
+	
+//	private static File findNMostSimilarFiles(Map<File, Float> similarityMap, int n, boolean print) {
+//		File mostSimilarFile = null;
+//		float highestSimilarity = -1;
+//	
+//		for (Map.Entry<File, Float> entry : similarityMap.entrySet()) {
+//			File file = entry.getKey();
+//			float similarity = entry.getValue();
+//			if (similarity > highestSimilarity) {
+//				highestSimilarity = similarity;
+//				mostSimilarFile = file;
+//			}
+//		}
+//		
+//		if(print) {
+//			if (mostSimilarFile != null) {
+//				System.out.println("Most similar file: " + mostSimilarFile.getName());
+//			} else {
+//				System.out.println("No similar file found.");
+//			}
+//		}
+//	
+//		return mostSimilarFile;
+//	}
 	
 	private static float cosineSimilarity(List<Float> a, List<Float> b) {
 	    float dotProduct = 0;
@@ -229,6 +422,34 @@ public class QAPatternExample {
 	
 	    return dotProduct / (magnitudeA * magnitudeB);
 	}
+	
+	private static String QuestionDialog() {
+	    String[] question = new String[1];
+	
+	    BowlerStudio.runLater({
+	        TextInputDialog dialog = new TextInputDialog("How do I make a box?");
+	        dialog.setTitle("Laputa");
+	        dialog.setHeaderText("Laputa will do its best to help you.\nWhat is your question?");
+	        dialog.setContentText("Question:");
+	
+	        Optional<String> result = dialog.showAndWait();
+            if (result.isPresent()) {
+                question[0] = result.get();
+            }
+	    });
+	
+	    // Wait for the user to enter a question
+	    while (question[0] == null) {
+	        try {
+	            Thread.sleep(100);
+	        } catch (InterruptedException e) {
+	            e.printStackTrace();
+	        }
+	    }
+	
+	    return question[0];
+	}
+	
 
 
 	private static KeyDialog(String keyLocation) {
@@ -274,11 +495,39 @@ public class QAPatternExample {
         return "Search results for the question: " + question;
     }
 
-    private static String constructPrompt(File mostSimilarFile, String question) {
-        // Extract relevant content from search results
-        // Glue the extracted content together with the question to form the prompt
-	    String context = readFileContent(mostSimilarFile);
-	    return "Context:" + "\n```\n" + context + "\n```\n" + "Given the above context, answer the following question" + "\n```\n" + question + "\n```\n";
+	 private static String constructPrompt(List<File> mostSimilarFiles, String question) {
+	    // Extract relevant content from search results
+	    List<String> context = new ArrayList<>();
+	    for (File file : mostSimilarFiles) {
+	        try {
+	            String fileContent = readFileContent(file);
+	            context.add(fileContent);
+	        } catch (IOException e) {
+	            // Handle file read error, if needed
+	        }
+	    }
+	
+	    // Glue the extracted content together with the question to form the prompt
+	    StringBuilder promptBuilder = new StringBuilder();
+		StringBuilder larp = new StringBuilder();
+		larp.append("You are a helpful software engineer who is excited to help folks create things they enjoy!");
+		larp.append("Given the following sections from the BowlerStudio documentation, ");
+		larp.append("answer the question using only that information, outputted in markdown format.");
+		larp.append("If you are unsure and the answer is not explicitly written in the documentation, ");
+		larp.append("say Sorry, I don't know how to help with that.");
+		promptBuilder.append(larp)
+	    promptBuilder.append("Context:");
+		//promptBuilder.append("\n```\n");
+	    for (String fileContent : context) {
+	        promptBuilder.append(fileContent).append("\n");
+	    }
+	    //promptBuilder.append("```\n");
+	    promptBuilder.append("Given the above context, answer the following question using markdown format")
+		//promptBuilder.append("\n```\n");
+	    promptBuilder.append(question);
+		//promptBuilder.append("\n```\n");
+	
+	    return promptBuilder.toString();
 	}
 
 
@@ -321,7 +570,7 @@ public class OpenAIAPIClient {
         connection.setRequestProperty("Authorization", "Bearer " + apiKey);
         connection.setDoOutput(true);
 
-		System.out.println("Sending to API: " + data); // Print the response JSON
+//		System.out.println("Sending to API: " + data); // Print the response JSON
 		connection.getOutputStream().write(data.getBytes());
 
         int responseCode = connection.getResponseCode();
@@ -347,10 +596,15 @@ public class OpenAIAPIClient {
     }
 
     public static String callDavinciAPI(String prompt, String apiKey) throws IOException {
-        String data = "{\"prompt\": \"" + scrubData(prompt) + "\"}";
-		String response = callOpenAIAPI(DAVINCI_API_URL, data, apiKey);
+		def maxTokens = 100;
+        //String data = "{\"prompt\": \"" + scrubData(prompt) + "\", \"max_tokens\": " + maxTokens + ", \"model\": \"text-davinci-003\"}";
+        String data = "{\"prompt\": \"" + scrubData(prompt) + "\", \"max_tokens\": " + maxTokens + "}";
+		String jsonResponse = callOpenAIAPI(DAVINCI_API_URL, data, apiKey);
+		System.out.println("Response JSON: " + jsonResponse)
+		String response = parseOutputText(jsonResponse);
+		System.out.println("Parsed response: " + response)
         return response;
-    }
+	}
 
     public static List<List<Float>> callEmbeddingAPI(String[] inputs, String apiKey) throws IOException {
         String data = "{\"input\": " + buildInputJson(inputs) + ", \"model\": \"text-embedding-ada-002\"}";
@@ -433,6 +687,21 @@ public class OpenAIAPIClient {
         json.insert(0, "[").append("]");
         return json.toString();
     }
+	
+	public static String parseOutputText(String jsonResponse) throws IOException {
+		ObjectMapper objectMapper = new ObjectMapper();
+		JsonNode rootNode = objectMapper.readTree(jsonResponse);
+		JsonNode choicesNode = rootNode.path("choices");
+	
+		if (choicesNode.isArray() && choicesNode.size() > 0) {
+			JsonNode textNode = choicesNode.get(0).path("text");
+			if (textNode.isTextual()) {
+				return textNode.asText();
+			}
+		}
+	
+		return "";
+	}
 }
 
 public class MarkdownDownloader {
