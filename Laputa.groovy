@@ -11,6 +11,7 @@ import com.neuronrobotics.bowlerstudio.scripting.ScriptingEngine
 import javafx.scene.control.TextInputDialog
 import javafx.scene.layout.BorderPane
 import javafx.scene.layout.HBox
+import java.nio.file.DirectoryStream
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
@@ -40,10 +41,6 @@ import org.apache.http.client.methods.HttpGet;
 import org.apache.http.HttpEntity;
 import org.apache.http.HttpResponse;
 import org.apache.http.util.EntityUtils;
-import org.apache.http.impl.client.CloseableHttpClient;
-import org.apache.http.impl.client.HttpClients;
-import org.apache.http.Header;
-import org.apache.http.util.EntityUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
@@ -68,61 +65,67 @@ import javafx.scene.web.WebView;
 import javafx.stage.Stage;
 import java.util.Comparator
 import java.util.PriorityQueue
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 
 // inspired by https://simonwillison.net/2023/Jan/13/semantic-search-answers/
 
 public class QAPatternExample {
+    private static ModelAPIClient apiClient; // Declare apiClient as a class member
 
     public static void main(String[] args) throws IOException {
-        //String question = "How do i make a cube?";
-		String question = QuestionDialog();
-		System.out.println("Question: "+ question)
+		// Step 1: Prompt the user for a question
+		String defaultQuestion = "How do I make a cube?"
+		String question = QuestionDialog(defaultQuestion);
+		System.out.println("Question: " + question);
 		
 		
-		// Step 1: Retrieve user's API key
-        String keyLocation = ScriptingEngine.getWorkspace().getAbsolutePath() + File.separator +"gpt-key.txt"
-		if(!new File(keyLocation).exists()) {
-			KeyDialog(keyLocation)
-			return;
+		// Step 2: Retrieve the user's API key from a local file in bowler-workspace
+		File keyFile = new File(ScriptingEngine.getWorkspace(), "gpt-key.txt");
+		if (!keyFile.exists()) {
+			// If the API key file doesn't exist, prompt the user to enter it
+		    KeyDialog(keyFile);
+		    return;
 		}
-		System.out.println("Loading API key from "+keyLocation)
-		String apiKey = new String(Files.readAllBytes(Paths.get(keyLocation)));
-		//println "API key: "+apiKey
+		System.out.println("Loading API key from " + keyFile);
+		String apiKey = new String(Files.readAllBytes(keyFile.toPath()));
+		ModelAPIClient apiClient = new ModelAPIClient(apiKey);
+		System.out.println(apiClient.getModels());
 		
-		// Step 2: Get embeddings for the question
+		// Step 3: Get embeddings for the user's question
 		List<String> questionSegments = getSegmentsFromString(question);
-		List<Float> questionEmbeddings = getEmbeddings(questionSegments, apiKey);
+		List<Float> questionEmbeddings = getEmbeddings(questionSegments);
 		
-		// Step 3: Download documentation
+		// Step 4: Download BowlerStudio documentation
 		String linkToDocumentation = "https://github.com/CommonWealthRobotics/CommonWealthRobotics.github.io/tree/a0551b55ee1cc64f48c16e08a6f7928e7d6601bd/content/JavaCAD";
-		String savePath = ScriptingEngine.getWorkspace().getAbsolutePath() + File.separator + "documentation";
+		Path savePath = Paths.get(ScriptingEngine.getWorkspace().getAbsolutePath(), "documentation").normalize().toAbsolutePath();
 		//new MarkdownDownloader(linkToDocumentation, savePath);
 		//new GistDownloader(linkToDocumentation, savePath);
 		
-		// Step 4: Iterate through documentation files, get embeddings, and cache locally
+		// Step 5: Iterate through documentation files, get embeddings, and cache locally
 		List<File> files = getFiles(savePath);
-		Map<File, List<Float>> embeddingsMap = getEmbeddingsMap(files, savePath, apiKey); // pass savePath to search the cache for new files
-
-	    // Step 5: Calculate similarity between question embeddings and markdown file embeddings
+		Map<File, List<Float>> embeddingsMap = getEmbeddingsMap(files, savePath); // pass savePath to search the cache for new files
+		
+		// Step 6: Calculate similarity between question embeddings and documentation file embeddings
 		Map<File, Float> similarityMap = calculateSimilarity(questionEmbeddings, embeddingsMap);
-	
-	    // Step 6: Find the N most similar files
+		
+		// Step 7: Find the N most similar files
 		List<File> mostSimilarFiles = findNMostSimilarFiles(similarityMap, 2, true);
 		
-		// Step 7: Construct the prompt for the OpenAI API call
+		// Step 8: Construct the prompt for the OpenAI API call
 		String prompt = constructPrompt(mostSimilarFiles, question);
-
-		// Step 8: Call the OpenAI API to get the answer
-		String answer = OpenAIAPIClient.callDavinciAPI(prompt, apiKey);
-
-		// Step 9: Process and display the answer
-		System.out.println("Answer:" + answer);
-        Tab t = new Tab("Laputa");
-        HBox content = new HBox();
-        content.getChildren().add(new TextArea(answer));
-        t.setContent(content);
-        BowlerStudioController.addObject(t, null);
 		
+		// Step 9: Call the OpenAI API to get the answer
+		String answer = apiClient.callChatAPI(prompt);
+		
+		// Step 10: Process and display the answer
+		System.out.println("Answer: " + answer);
+		Tab t = new Tab("Laputa");
+		HBox content = new HBox();
+		content.getChildren().add(new TextArea(answer));
+		t.setContent(content);
+		BowlerStudioController.addObject(t, null);
+
     }
 	
 	public void close() {
@@ -131,7 +134,7 @@ public class QAPatternExample {
 		println "Clean Exit"
 	}
 	
-	private static List<File> getFiles(String savePath) {
+	private static List<File> getFiles(Path savePath) {
 		List<File> markdownFiles = getMarkdownFiles(savePath);
 		List<File> gistFiles = getGistFiles(savePath);
 		List<File> javaFiles = getJavaFiles(savePath);
@@ -143,51 +146,55 @@ public class QAPatternExample {
 	
 		return files;
 	}
-	
-	private static List<File> getMarkdownFiles(String savePath) {
-		List<File> markdownFiles = new ArrayList<>();
-		File[] files = new File(savePath).listFiles();
 
-		if (files != null) {
-			for (File file : files) {
-				if (file.isFile() && file.getName().endsWith(".md")) {
-					markdownFiles.add(file);
-				}
-			}
-		}
+	private static List<File> getMarkdownFiles(Path savePath) throws IOException {
+	    List<File> markdownFiles = new ArrayList<>();
+	    try {
+	        DirectoryStream<Path> directoryStream = Files.newDirectoryStream(savePath);
+	        for (Path path : directoryStream) {
+	            if (Files.isRegularFile(path) && path.getFileName().toString().endsWith(".md")) {
+	                markdownFiles.add(path.toFile()); // Convert Path to File and add to the list
+	            }
+	        }
+	    } catch (IOException e) {
+	        // Handle the exception or log the error
+	        e.printStackTrace();
+	    }
+	    return markdownFiles;
+	}
+	
+	private static List<File> getGistFiles(Path savePath) throws IOException {
+	    List<File> gistFiles = new ArrayList<>();
+	    try {
+	        DirectoryStream<Path> directoryStream = Files.newDirectoryStream(savePath);
+	        for (Path path : directoryStream) {
+	            if (Files.isRegularFile(path) && path.getFileName().toString().endsWith(".groovy")) {
+	                gistFiles.add(path.toFile()); // Convert Path to File and add to the list
+	            }
+	        }
+	    } catch (IOException e) {
+	        // Handle the exception or log the error
+	        e.printStackTrace();
+	    }
+	    return gistFiles;
+	}
+	
+	private static List<File> getJavaFiles(Path savePath) throws IOException {
+	    List<File> javaFiles = new ArrayList<>();
+	    try {
+	        DirectoryStream<Path> directoryStream = Files.newDirectoryStream(savePath);
+	        for (Path path : directoryStream) {
+	            if (Files.isRegularFile(path) && path.getFileName().toString().endsWith(".java")) {
+	                javaFiles.add(path.toFile()); // Convert Path to File and add to the list
+	            }
+	        }
+	    } catch (IOException e) {
+	        // Handle the exception or log the error
+	        e.printStackTrace();
+	    }
+	    return javaFiles;
+	}
 
-		return markdownFiles;
-	}
-	
-	private static List<File> getGistFiles(String savePath) {
-		List<File> gistFiles = new ArrayList<>();
-		File[] files = new File(savePath).listFiles();
-	
-		if (files != null) {
-			for (File file : files) {
-				if (file.isFile() && file.getName().endsWith(".groovy")) {
-					gistFiles.add(file);
-				}
-			}
-		}
-	
-		return gistFiles;
-	}
-	
-	private static List<File> getJavaFiles(String savePath) {
-		List<File> javaFiles = new ArrayList<>();
-		File[] files = new File(savePath).listFiles();
-	
-		if (files != null) {
-			for (File file : files) {
-				if (file.isFile() && file.getName().endsWith(".java")) {
-					javaFiles.add(file);
-				}
-			}
-		}
-	
-		return javaFiles;
-	}
 	
 	private static String readFileContent(File file) throws IOException {
 		return new String(Files.readAllBytes(file.toPath()));
@@ -218,9 +225,9 @@ public class QAPatternExample {
 		return segmentsList;
 	}
 	
-	private static List<Float> getEmbeddings(List<String> segments, String apiKey) {
+	private static List<Float> getEmbeddings(List<String> segments) {
 	    // Call the OpenAI API with segments to get embeddings
-	    List<List<Float>> embeddings = OpenAIAPIClient.callEmbeddingAPI(segments.toArray(new String[0]), apiKey);
+	    List<List<Float>> embeddings = apiClient.callEmbeddingAPI(segments.toArray(new String[0]));
 	
 	    List<Float> flattenedEmbeddings = new ArrayList<>();
 	    for (List<Float> segmentEmbeddings : embeddings) {
@@ -230,8 +237,9 @@ public class QAPatternExample {
 	    return flattenedEmbeddings;
 	}
 	
-	private static Map<File, List<Float>> getEmbeddingsMap(List<File> files, String savePath, String apiKey) {
-	    File saveFile = new File(savePath, "embeddingsMap.ser");
+	private static Map<File, List<Float>> getEmbeddingsMap(List<File> files, Path savePath) {
+		def filename = "embeddingsMap.ser"
+		File saveFile = savePath.resolve(filename).toFile();
 	    Map<File, List<Float>> embeddingsMap = new HashMap<>();
 	
 	    // Load cache from file if it exists
@@ -245,7 +253,7 @@ public class QAPatternExample {
 	            System.out.println("Embedding file: " + file.getName()); // Print the file name
 	            List<String> segments = getSegmentsFromFile(file);
 	            try {
-	                List<Float> embeddings = getEmbeddings(segments, apiKey);
+	                List<Float> embeddings = getEmbeddings(segments);
 	                embeddingsMap.put(file, embeddings);
 	            } catch (Exception e) {
 	                System.err.println("Failed to get embeddings for file: " + file.getName());
@@ -320,7 +328,7 @@ public class QAPatternExample {
 	}
 
 	
-//	private static Map<File, List<Float>> getEmbeddingsMap(List<File> files, String apiKey) {
+//	private static Map<File, List<Float>> getEmbeddingsMap(List<File> files) {
 //		Map<File, List<Float>> embeddingsMap = new HashMap<>();
 //	
 //		for (File file : files) {
@@ -423,11 +431,11 @@ public class QAPatternExample {
 	    return dotProduct / (magnitudeA * magnitudeB);
 	}
 	
-	private static String QuestionDialog() {
+	private static String QuestionDialog(String defaultQuestion) {
 	    String[] question = new String[1];
 	
 	    BowlerStudio.runLater({
-	        TextInputDialog dialog = new TextInputDialog("How do I make a box?");
+	        TextInputDialog dialog = new TextInputDialog(defaultQuestion);
 	        dialog.setTitle("Laputa");
 	        dialog.setHeaderText("Laputa will do its best to help you.\nWhat is your question?");
 	        dialog.setContentText("Question:");
@@ -452,7 +460,7 @@ public class QAPatternExample {
 	
 
 
-	private static KeyDialog(String keyLocation) {
+	private static KeyDialog(File keyFile) {
 		BowlerStudio.runLater({
 			TextInputDialog dialog = new TextInputDialog("your OpenAI API Key here");
 			dialog.setTitle("Enter your OpenAI Key");
@@ -466,13 +474,13 @@ public class QAPatternExample {
 				System.out.println("Your key: " + resultGet);
 				new Thread({
 					try {
-						File myObj = new File(keyLocation);
+						File myObj = keyFile;
 						if (myObj.createNewFile()) {
 							System.out.println("File created: " + myObj.getName());
 						} else {
 							System.out.println("File already exists.");
 						}
-						FileWriter myWriter = new FileWriter(keyLocation);
+						FileWriter myWriter = new FileWriter(keyFile);
 						myWriter.write(resultGet);
 						myWriter.close();
 						System.out.println("Successfully wrote key to your local file.");
@@ -557,157 +565,401 @@ public class QAPatternExample {
 }
 
 
+public class ModelAPIClient {
+	private static final String MODELS_API_URL = "https://api.openai.com/v1/models"
+	private static final String EMBEDDING_API_URL = "https://api.openai.com/v1/engines/davinci/calculate_embeddings";
+	private static final String CHAT_API_URL = "https://api.openai.com/v1/engines/davinci/completions";
+	private static final MediaType JSON_MEDIA_TYPE = MediaType.parse("application/json");
 
-public class OpenAIAPIClient {
-    private static final String DAVINCI_API_URL = "https://api.openai.com/v1/engines/davinci/completions";
-    private static final String EMBEDDING_API_URL = "https://api.openai.com/v1/embeddings";
-    private static final int EMBEDDING_SIZE = 1536;
+	private final String apiKey;
+	private final OkHttpClient client;
+	private final Gson gson;
 
-    private static String callOpenAIAPI(String url, String data, String apiKey) throws IOException {
-        HttpURLConnection connection = (HttpURLConnection) new URL(url).openConnection();
-        connection.setRequestMethod("POST");
-        connection.setRequestProperty("Content-Type", "application/json");
-        connection.setRequestProperty("Authorization", "Bearer " + apiKey);
-        connection.setDoOutput(true);
-
-//		System.out.println("Sending to API: " + data); // Print the response JSON
-		connection.getOutputStream().write(data.getBytes());
-
-        int responseCode = connection.getResponseCode();
-
-        BufferedReader reader;
-        if (responseCode >= 400) {
-            reader = new BufferedReader(new InputStreamReader(connection.getErrorStream()));
-        } else {
-            reader = new BufferedReader(new InputStreamReader(connection.getInputStream()));
-        }
-
-        StringBuilder response = new StringBuilder();
-        String line;
-        while ((line = reader.readLine()) != null) {
-            response.append(line);
-        }
-        reader.close();
-
-        String resp = response.toString();
-//		System.out.println("Response JSON: " + resp); // Print the response JSON
-
-        return resp;
-    }
-
-    public static String callDavinciAPI(String prompt, String apiKey) throws IOException {
-		def maxTokens = 100;
-        //String data = "{\"prompt\": \"" + scrubData(prompt) + "\", \"max_tokens\": " + maxTokens + ", \"model\": \"text-davinci-003\"}";
-        String data = "{\"prompt\": \"" + scrubData(prompt) + "\", \"max_tokens\": " + maxTokens + "}";
-		String jsonResponse = callOpenAIAPI(DAVINCI_API_URL, data, apiKey);
-		System.out.println("Response JSON: " + jsonResponse)
-		String response = parseOutputText(jsonResponse);
-		System.out.println("Parsed response: " + response)
-        return response;
+	public ModelAPIClient(String apiKey) {
+		this.apiKey = apiKey;
+		this.client = new OkHttpClient();
+		this.gson = new GsonBuilder().create();
 	}
+	
+	public String getModels() throws IOException {
+		Request request = createRequestWithAuthorizationHeader(MODELS_API_URL, null);
+		Response response = client.newCall(request).execute();
+		if (!response.isSuccessful()) {
+			throw new IOException("Failed to get models: " + response);
+		}
 
-    public static List<List<Float>> callEmbeddingAPI(String[] inputs, String apiKey) throws IOException {
-        String data = "{\"input\": " + buildInputJson(inputs) + ", \"model\": \"text-embedding-ada-002\"}";
-        String response = callOpenAIAPI(EMBEDDING_API_URL, data, apiKey);
+		String responseBody = response.body().string();
+		ModelsResponse modelsResponse = gson.fromJson(responseBody, ModelsResponse.class);
+		return modelsResponse.toString();
+	}
+	
+	private static class ModelsResponse {
+        private final List<ModelInfo> data;
 
-        // Extract the embeddings from the response
-        List<List<Float>> embeddings = extractEmbeddings(response);
+        public ModelsResponse(List<ModelInfo> data) {
+            this.data = data;
+        }
 
-        return embeddings;
-    }
+        public List<ModelInfo> getData() {
+            return data;
+        }
 
-    private static List<List<Float>> extractEmbeddings(String response) {
-        try {
-            JSONObject jsonResponse = new JSONObject(response);
-            JSONArray data = jsonResponse.getJSONArray("data");
-
-            List<List<Float>> embeddings = new ArrayList<>();
-
-            for (int i = 0; i < data.length(); i++) {
-                JSONObject embeddingObj = data.getJSONObject(i);
-                JSONArray embeddingArray = embeddingObj.getJSONArray("embedding");
-
-                List<Float> embedding = new ArrayList<>();
-
-                for (int j = 0; j < embeddingArray.length(); j++) {
-                    float value = (float) embeddingArray.getDouble(j);
-                    embedding.add(value);
+        @Override
+        public String toString() {
+            StringBuilder sb = new StringBuilder();
+            for (ModelInfo modelInfo : data) {
+                sb.append("Model ID: ").append(modelInfo.getId()).append("\n");
+                sb.append("Owned By: ").append(modelInfo.getOwnedBy()).append("\n");
+                sb.append("Permissions:\n");
+                for (Permission permission : modelInfo.getPermissions()) {
+                    sb.append("  Permission ID: ").append(permission.getId()).append("\n");
+                    sb.append("  Allow Create Engine: ").append(permission.isAllowCreateEngine()).append("\n");
+                    sb.append("  Allow Sampling: ").append(permission.isAllowSampling()).append("\n");
+                    sb.append("  Allow Logprobs: ").append(permission.isAllowLogprobs()).append("\n");
+                    sb.append("  Allow Search Indices: ").append(permission.isAllowSearchIndices()).append("\n");
+                    sb.append("  Allow View: ").append(permission.isAllowView()).append("\n");
+                    sb.append("  Allow Fine Tuning: ").append(permission.isAllowFineTuning()).append("\n");
+                    sb.append("  Organization: ").append(permission.getOrganization()).append("\n");
+                    sb.append("  Group: ").append(permission.getGroup()).append("\n");
+                    sb.append("  Is Blocking: ").append(permission.isBlocking()).append("\n");
+                    sb.append("\n");
                 }
-
-                embeddings.add(embedding);
+                sb.append("\n");
             }
-
-            return embeddings;
-        } catch (JSONException e) {
-            throw new IllegalArgumentException("Invalid response format: " + e.getMessage());
+            return sb.toString();
         }
     }
 
-    private static String escapeNewLines(String text) {
-        return text.replace("\n", "\\n");
+    private static class ModelInfo {
+        private final String id;
+        private final String owned_by;
+        private final List<Permission> permission;
+
+        public ModelInfo(String id, String owned_by, List<Permission> permission) {
+            this.id = id;
+            this.owned_by = owned_by;
+            this.permission = permission;
+        }
+
+        public String getId() {
+            return id;
+        }
+
+        public String getOwnedBy() {
+            return owned_by;
+        }
+
+        public List<Permission> getPermissions() {
+            return permission;
+        }
     }
 
-	private static String scrubData(String data) {
-		String cleanedData = cleanHtml(data);
-		cleanedData = cleanSpecialCharacters(cleanedData);
-		cleanedData = escapeQuotes(cleanedData)
-		return cleanedData;
-	}
-	
-    private static String cleanHtml(String html) {
-        Document dirtyDocument = Jsoup.parse(html);
-        Document cleanDocument = new Cleaner(Whitelist.relaxed()).clean(dirtyDocument);
-        return cleanDocument.body().html();
+    private static class Permission {
+        private final String id;
+        private final boolean allow_create_engine;
+        private final boolean allow_sampling;
+        private final boolean allow_logprobs;
+        private final boolean allow_search_indices;
+        private final boolean allow_view;
+        private final boolean allow_fine_tuning;
+        private final String organization;
+        private final String group;
+        private final boolean is_blocking;
+
+        public Permission(String id, boolean allow_create_engine, boolean allow_sampling,
+                          boolean allow_logprobs, boolean allow_search_indices, boolean allow_view,
+                          boolean allow_fine_tuning, String organization, String group, boolean is_blocking) {
+            this.id = id;
+            this.allow_create_engine = allow_create_engine;
+            this.allow_sampling = allow_sampling;
+            this.allow_logprobs = allow_logprobs;
+            this.allow_search_indices = allow_search_indices;
+            this.allow_view = allow_view;
+            this.allow_fine_tuning = allow_fine_tuning;
+            this.organization = organization;
+            this.group = group;
+            this.is_blocking = is_blocking;
+        }
+
+        public String getId() {
+            return id;
+        }
+
+        public boolean isAllowCreateEngine() {
+            return allow_create_engine;
+        }
+
+        public boolean isAllowSampling() {
+            return allow_sampling;
+        }
+
+        public boolean isAllowLogprobs() {
+            return allow_logprobs;
+        }
+
+        public boolean isAllowSearchIndices() {
+            return allow_search_indices;
+        }
+
+        public boolean isAllowView() {
+            return allow_view;
+        }
+
+        public boolean isAllowFineTuning() {
+            return allow_fine_tuning;
+        }
+
+        public String getOrganization() {
+            return organization;
+        }
+
+        public String getGroup() {
+            return group;
+        }
+
+        public boolean isBlocking() {
+            return is_blocking;
+        }
     }
 
-	private static String cleanSpecialCharacters(String text) {
-		def ret = StringUtils.remove(text, '-'); // Remove "-"
-//		ret = StringUtils.remove(ret, ':'); // Remove ":"
-	    return ret
-	}
-	
-	private static String escapeQuotes(String input) {
-		return input.replace("\"", "\\\"");
-	}
-	
-    private static String buildInputJson(String[] inputs) {
-        StringBuilder json = new StringBuilder();
-        for (int i = 0; i < inputs.length; i++) {
-        def str = scrubData(inputs[i])
 
-        // Skip empty or whitespace entries
-        if (str == null || str.trim().isEmpty()) {
-            continue;
-        }
-        if (json.length() > 0) {
-            json.append(", ");
-        }
-        json.append("\"").append(str).append("\"");
+
+	public List<List<Float>> callEmbeddingAPI(String[] segment) throws IOException {
+		String jsonBody = gson.toJson(new EmbeddingRequest(segment));
+		RequestBody body = RequestBody.create(jsonBody, JSON_MEDIA_TYPE);
+		Request request = createRequestWithAuthorizationHeader(EMBEDDING_API_URL, body);
+		Response response = client.newCall(request).execute()
+		if (!response.isSuccessful()) {
+			throw new IOException("Failed to call embedding API: " + response);
 		}
-        json.insert(0, "[").append("]");
-        return json.toString();
-    }
+
+		String responseBody = response.body().string();
+		EmbeddingResponse embeddingResponse = gson.fromJson(responseBody, EmbeddingResponse.class);
+		return embeddingResponse.getEmbeddings();
+	}
+
+	public String callChatAPI(String prompt) throws IOException {
+		String jsonBody = gson.toJson(new ChatRequest(prompt));
+		RequestBody body = RequestBody.create(jsonBody, JSON_MEDIA_TYPE);
+		Request request = createRequestWithAuthorizationHeader(CHAT_API_URL, body);
+	    Response response = client.newCall(request).execute()
+	    if (!response.isSuccessful()) {
+	        throw new IOException("Failed to call chat API: " + response);
+	    }
 	
-	public static String parseOutputText(String jsonResponse) throws IOException {
-		ObjectMapper objectMapper = new ObjectMapper();
-		JsonNode rootNode = objectMapper.readTree(jsonResponse);
-		JsonNode choicesNode = rootNode.path("choices");
+	    String responseBody = response.body().string();
+	    ChatResponse chatResponse = gson.fromJson(responseBody, ChatResponse.class);
+	    return chatResponse.getAnswer();
+	}
+
+	private Request createRequestWithAuthorizationHeader(String url, RequestBody body) {
+	    Request.Builder requestBuilder = new Request.Builder()
+	            .url(url)
+	            .header("Authorization", "Bearer " + apiKey);
 	
-		if (choicesNode.isArray() && choicesNode.size() > 0) {
-			JsonNode textNode = choicesNode.get(0).path("text");
-			if (textNode.isTextual()) {
-				return textNode.asText();
-			}
+	    if (body != null) {
+	        requestBuilder.post(body);
+	    } else {
+	        requestBuilder.get();
+	    }
+	
+	    return requestBuilder.build();
+	}
+
+
+	private static class EmbeddingRequest {
+		private final String text;
+
+		public EmbeddingRequest(String text) {
+			this.text = text;
 		}
-	
-		return "";
+	}
+
+	private static class EmbeddingResponse {
+		private final List<List<Float>> embeddings;
+
+		public EmbeddingResponse(List<List<Float>> embeddings) {
+			this.embeddings = embeddings;
+		}
+
+		public List<List<Float>> getEmbeddings() {
+			return embeddings;
+		}
+	}
+
+	private static class ChatRequest {
+		private final String prompt;
+
+		public ChatRequest(String prompt) {
+			this.prompt = prompt;
+		}
+	}
+
+	private static class ChatResponse {
+		private final String answer;
+
+		public ChatResponse(String answer) {
+			this.answer = answer;
+		}
+
+		public String getAnswer() {
+			return answer;
+		}
 	}
 }
+
+
+
+//public class ModelAPIClient {
+//    private static final String OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
+//    private static final String EMBEDDING_API_URL = "https://api.openai.com/v1/embeddings";
+//    private static final int EMBEDDING_SIZE = 1536;
+//
+//    private static String callOpenAIAPI(String url, String data) throws IOException {
+//        HttpURLConnection connection = (HttpURLConnection) new URL(url).openConnection();
+//        connection.setRequestMethod("POST");
+//        connection.setRequestProperty("Content-Type", "application/json");
+//        connection.setRequestProperty("Authorization", "Bearer " + apiKey);
+//        connection.setDoOutput(true);
+//
+////		System.out.println("Sending to API: " + data); // Print the response JSON
+//		connection.getOutputStream().write(data.getBytes());
+//
+//        int responseCode = connection.getResponseCode();
+//
+//        BufferedReader reader;
+//        if (responseCode >= 400) {
+//            reader = new BufferedReader(new InputStreamReader(connection.getErrorStream()));
+//        } else {
+//            reader = new BufferedReader(new InputStreamReader(connection.getInputStream()));
+//        }
+//
+//        StringBuilder response = new StringBuilder();
+//        String line;
+//        while ((line = reader.readLine()) != null) {
+//            response.append(line);
+//        }
+//        reader.close();
+//
+//        String resp = response.toString();
+////		System.out.println("Response JSON: " + resp); // Print the response JSON
+//
+//        return resp;
+//    }
+//
+//    public static String callChatAPI(String prompt) throws IOException {
+//		def maxTokens = 100;prompt = "[stuff]";
+//		String[] messages = {prompt}; // Create an array with the prompt as the only element
+//		String data = "{\"messages\": " + Arrays.toString(messages) + ", \"max_tokens\": " + maxTokens + ", \"model\": \"gpt-3.5-turbo-0613\"}";
+//		String jsonResponse = callOpenAIAPI(OPENAI_API_URL, data, apiKey);
+//		System.out.println("Response JSON: " + jsonResponse)
+//		String response = parseOutputText(jsonResponse);
+//		System.out.println("Parsed response: " + response)
+//        return response;
+//	}
+//
+//    public static List<List<Float>> callEmbeddingAPI(String[] inputs) throws IOException {
+//        String data = "{\"input\": " + buildInputJson(inputs) + ", \"model\": \"text-embedding-ada-002\"}";
+//        String response = callOpenAIAPI(EMBEDDING_API_URL, data, apiKey);
+//
+//        // Extract the embeddings from the response
+//        List<List<Float>> embeddings = extractEmbeddings(response);
+//
+//        return embeddings;
+//    }
+//
+//    private static List<List<Float>> extractEmbeddings(String response) {
+//        try {
+//            JSONObject jsonResponse = new JSONObject(response);
+//            JSONArray data = jsonResponse.getJSONArray("data");
+//
+//            List<List<Float>> embeddings = new ArrayList<>();
+//
+//            for (int i = 0; i < data.length(); i++) {
+//                JSONObject embeddingObj = data.getJSONObject(i);
+//                JSONArray embeddingArray = embeddingObj.getJSONArray("embedding");
+//
+//                List<Float> embedding = new ArrayList<>();
+//
+//                for (int j = 0; j < embeddingArray.length(); j++) {
+//                    float value = (float) embeddingArray.getDouble(j);
+//                    embedding.add(value);
+//                }
+//
+//                embeddings.add(embedding);
+//            }
+//
+//            return embeddings;
+//        } catch (JSONException e) {
+//            throw new IllegalArgumentException("Invalid response format: " + e.getMessage());
+//        }
+//    }
+//
+//    private static String escapeNewLines(String text) {
+//        return text.replace("\n", "\\n");
+//    }
+//
+//	private static String scrubData(String data) {
+//		String cleanedData = cleanHtml(data);
+//		cleanedData = cleanSpecialCharacters(cleanedData);
+//		cleanedData = escapeQuotes(cleanedData)
+//		return cleanedData;
+//	}
+//	
+//    private static String cleanHtml(String html) {
+//        Document dirtyDocument = Jsoup.parse(html);
+//        Document cleanDocument = new Cleaner(Whitelist.relaxed()).clean(dirtyDocument);
+//        return cleanDocument.body().html();
+//    }
+//
+//	private static String cleanSpecialCharacters(String text) {
+//		def ret = StringUtils.remove(text, '-'); // Remove "-"
+////		ret = StringUtils.remove(ret, ':'); // Remove ":"
+//	    return ret
+//	}
+//	
+//	private static String escapeQuotes(String input) {
+//		return input.replace("\"", "\\\"");
+//	}
+//	
+//    private static String buildInputJson(String[] inputs) {
+//        StringBuilder json = new StringBuilder();
+//        for (int i = 0; i < inputs.length; i++) {
+//        def str = scrubData(inputs[i])
+//
+//        // Skip empty or whitespace entries
+//        if (str == null || str.trim().isEmpty()) {
+//            continue;
+//        }
+//        if (json.length() > 0) {
+//            json.append(", ");
+//        }
+//        json.append("\"").append(str).append("\"");
+//		}
+//        json.insert(0, "[").append("]");
+//        return json.toString();
+//    }
+//	
+//	public static String parseOutputText(String jsonResponse) throws IOException {
+//		ObjectMapper objectMapper = new ObjectMapper();
+//		JsonNode rootNode = objectMapper.readTree(jsonResponse);
+//		JsonNode choicesNode = rootNode.path("choices");
+//	
+//		if (choicesNode.isArray() && choicesNode.size() > 0) {
+//			JsonNode textNode = choicesNode.get(0).path("text");
+//			if (textNode.isTextual()) {
+//				return textNode.asText();
+//			}
+//		}
+//	
+//		return "";
+//	}
+//}
 
 public class MarkdownDownloader {
     private CloseableHttpClient httpClient;
 
-    public MarkdownDownloader(String targetSite, String savePath) {
+    public MarkdownDownloader(String targetSite, Path savePath) {
         try {
             httpClient = HttpClients.createDefault();
             downloadMarkdownFiles(targetSite, savePath);
@@ -728,7 +980,7 @@ public class MarkdownDownloader {
         }
     }
 
-    private void downloadMarkdownFiles(String targetSite, String savePath) throws IOException, URISyntaxException {
+    private void downloadMarkdownFiles(String targetSite, Path savePath) throws IOException, URISyntaxException {
         URIBuilder uriBuilder = new URIBuilder(targetSite);
         HttpGet request = new HttpGet(uriBuilder.build());
         HttpResponse response = httpClient.execute(request);
@@ -748,14 +1000,13 @@ public class MarkdownDownloader {
         return link.endsWith(".md");
     }
 
-	private void downloadFile(String fileUrl, String savePath) throws IOException {
+	private void downloadFile(String fileUrl, Path savePath) throws IOException {
 	    String fileName = fileUrl.substring(fileUrl.lastIndexOf('/') + 1);
-	    Path saveDirectory = Paths.get(savePath);
+	    Path saveDirectory = savePath;
 	    if (!Files.exists(saveDirectory)) {
 	        Files.createDirectories(saveDirectory);
 	    }
-	    savePath = savePath + File.separator + fileName;
-	    Path outputFile = Paths.get(savePath);
+	    File outputFile = savePath + File.separator + fileName;
 	
 	    // Check if the file already exists
 	    if (Files.exists(outputFile)) {
