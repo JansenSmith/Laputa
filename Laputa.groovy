@@ -77,7 +77,7 @@ public class QAPatternExample {
 		// Step 1: Prompt the user for a question
 		String defaultQuestion = "How do I make a cube?"
 		String question = QuestionDialog(defaultQuestion);
-		System.out.println("Question: " + question);
+		//System.out.println("Question: " + question);
 		
 		
 		// Step 2: Retrieve the user's API key from a local file in bowler-workspace
@@ -89,7 +89,7 @@ public class QAPatternExample {
 		}
 		System.out.println("Loading API key from " + keyFile);
 		String apiKey = new String(Files.readAllBytes(keyFile.toPath()));
-		ModelAPIClient apiClient = new ModelAPIClient(apiKey);
+		ModelAPIClient apiClient = new ModelAPIClient("gpt-key.txt");
 		System.out.println(apiClient.getModels());
 		
 		// Step 3: Get embeddings for the user's question
@@ -97,34 +97,40 @@ public class QAPatternExample {
 		List<Float> questionEmbeddings = getEmbeddings(questionSegments);
 		
 		// Step 4: Download BowlerStudio documentation
-		String linkToDocumentation = "https://github.com/CommonWealthRobotics/CommonWealthRobotics.github.io/tree/a0551b55ee1cc64f48c16e08a6f7928e7d6601bd/content/JavaCAD";
-		Path savePath = Paths.get(ScriptingEngine.getWorkspace().getAbsolutePath(), "documentation").normalize().toAbsolutePath();
+		String url="https://github.com/CommonWealthRobotics/CommonWealthRobotics.github.io.git";
+		ScriptingEngine.cloneRepo(url, null)
+		File locationOfDocs = ScriptingEngine.getRepositoryCloneDirectory(url);
+		Path savePath = Paths.get(ScriptingEngine.getWorkspace().getAbsolutePath(), "Laputa").normalize().toAbsolutePath();
+		def status = 1
+		
+		//String GroovyFiles = ScriptingEngine.getWorkspace().getAbsolutePath() + File.separator + "gitcache" + File.separator + "gist.github.com";
+		//String savePath = ScriptingEngine.getWorkspace().getAbsolutePath() + File.separator + "Laputa";
 		//new MarkdownDownloader(linkToDocumentation, savePath);
 		//new GistDownloader(linkToDocumentation, savePath);
 		
-		// Step 5: Iterate through documentation files, get embeddings, and cache locally
-		List<File> files = getFiles(savePath);
-		Map<File, List<Float>> embeddingsMap = getEmbeddingsMap(files, savePath); // pass savePath to search the cache for new files
-		
-		// Step 6: Calculate similarity between question embeddings and documentation file embeddings
-		Map<File, Float> similarityMap = calculateSimilarity(questionEmbeddings, embeddingsMap);
-		
-		// Step 7: Find the N most similar files
-		List<File> mostSimilarFiles = findNMostSimilarFiles(similarityMap, 2, true);
-		
-		// Step 8: Construct the prompt for the OpenAI API call
-		String prompt = constructPrompt(mostSimilarFiles, question);
-		
-		// Step 9: Call the OpenAI API to get the answer
-		String answer = apiClient.callChatAPI(prompt);
-		
-		// Step 10: Process and display the answer
-		System.out.println("Answer: " + answer);
-		Tab t = new Tab("Laputa");
-		HBox content = new HBox();
-		content.getChildren().add(new TextArea(answer));
-		t.setContent(content);
-		BowlerStudioController.addObject(t, null);
+//		// Step 5: Iterate through documentation files, get embeddings, and cache locally
+//		List<File> files = getFiles(savePath);
+//		Map<File, List<Float>> embeddingsMap = getEmbeddingsMap(files, savePath); // pass savePath to search the cache for new files
+//		
+//		// Step 6: Calculate similarity between question embeddings and documentation file embeddings
+//		Map<File, Float> similarityMap = calculateSimilarity(questionEmbeddings, embeddingsMap);
+//		
+//		// Step 7: Find the N most similar files
+//		List<File> mostSimilarFiles = findNMostSimilarFiles(similarityMap, 2, true);
+//		
+//		// Step 8: Construct the prompt for the OpenAI API call
+//		String prompt = constructPrompt(mostSimilarFiles, question);
+//		
+//		// Step 9: Call the OpenAI API to get the answer
+//		String answer = apiClient.callChatAPI(prompt);
+//		
+//		// Step 10: Process and display the answer
+//		System.out.println("Answer: " + answer);
+//		Tab t = new Tab("Laputa");
+//		HBox content = new HBox();
+//		content.getChildren().add(new TextArea(answer));
+//		t.setContent(content);
+//		BowlerStudioController.addObject(t, null);
 
     }
 	
@@ -610,20 +616,26 @@ public class ModelAPIClient {
             for (ModelInfo modelInfo : data) {
                 sb.append("Model ID: ").append(modelInfo.getId()).append("\n");
                 sb.append("Owned By: ").append(modelInfo.getOwnedBy()).append("\n");
-                sb.append("Permissions:\n");
-                for (Permission permission : modelInfo.getPermissions()) {
-                    sb.append("  Permission ID: ").append(permission.getId()).append("\n");
-                    sb.append("  Allow Create Engine: ").append(permission.isAllowCreateEngine()).append("\n");
-                    sb.append("  Allow Sampling: ").append(permission.isAllowSampling()).append("\n");
-                    sb.append("  Allow Logprobs: ").append(permission.isAllowLogprobs()).append("\n");
-                    sb.append("  Allow Search Indices: ").append(permission.isAllowSearchIndices()).append("\n");
-                    sb.append("  Allow View: ").append(permission.isAllowView()).append("\n");
-                    sb.append("  Allow Fine Tuning: ").append(permission.isAllowFineTuning()).append("\n");
-                    sb.append("  Organization: ").append(permission.getOrganization()).append("\n");
-                    sb.append("  Group: ").append(permission.getGroup()).append("\n");
-                    sb.append("  Is Blocking: ").append(permission.isBlocking()).append("\n");
-                    sb.append("\n");
-                }
+				/*
+				 * sb.append("Permissions:\n"); for (Permission permission :
+				 * modelInfo.getPermissions()) {
+				 * sb.append("  Permission ID: ").append(permission.getId()).append("\n");
+				 * sb.append("  Allow Create Engine: ").append(permission.isAllowCreateEngine())
+				 * .append("\n");
+				 * sb.append("  Allow Sampling: ").append(permission.isAllowSampling()).append(
+				 * "\n");
+				 * sb.append("  Allow Logprobs: ").append(permission.isAllowLogprobs()).append(
+				 * "\n");
+				 * sb.append("  Allow Search Indices: ").append(permission.isAllowSearchIndices(
+				 * )).append("\n");
+				 * sb.append("  Allow View: ").append(permission.isAllowView()).append("\n");
+				 * sb.append("  Allow Fine Tuning: ").append(permission.isAllowFineTuning()).
+				 * append("\n");
+				 * sb.append("  Organization: ").append(permission.getOrganization()).append(
+				 * "\n"); sb.append("  Group: ").append(permission.getGroup()).append("\n");
+				 * sb.append("  Is Blocking: ").append(permission.isBlocking()).append("\n");
+				 * sb.append("\n"); }
+				 */
                 sb.append("\n");
             }
             return sb.toString();
@@ -722,8 +734,6 @@ public class ModelAPIClient {
         }
     }
 
-
-
 	public List<List<Float>> callEmbeddingAPI(String[] segment) throws IOException {
 		String jsonBody = gson.toJson(new EmbeddingRequest(segment));
 		RequestBody body = RequestBody.create(jsonBody, JSON_MEDIA_TYPE);
@@ -765,7 +775,6 @@ public class ModelAPIClient {
 	
 	    return requestBuilder.build();
 	}
-
 
 	private static class EmbeddingRequest {
 		private final String text;
