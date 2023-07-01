@@ -18,6 +18,7 @@ import com.theokanning.openai.completion.CompletionRequest;
 import com.theokanning.openai.image.CreateImageRequest;
 
 import com.neuronrobotics.bowlerstudio.scripting.ScriptingEngine
+import com.neuronrobotics.bowlerstudio.BowlerStudioController
 import java.nio.file.Files
 
 import java.util.ArrayList;
@@ -126,8 +127,8 @@ class TabManagerDevice{
 	}
 }
 
-//static def tabHolder = DeviceManager.getSpecificDevice("ImageRequest", {
-//	TabManagerDevice dev = new TabManagerDevice("ImageRequest")
-//	dev.connect()
-//	return dev
-//})
+static def tabHolder = DeviceManager.getSpecificDevice("ImageRequest", {
+	TabManagerDevice dev = new TabManagerDevice("ImageRequest")
+	dev.connect()
+	return dev
+})
