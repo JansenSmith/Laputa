@@ -1,5 +1,11 @@
 @Grapes(
+	@Grab(group='com.theokanning.openai-gpt3-java', module='api', version='0.14.0')
+)
+@Grapes(
 	@Grab(group='com.theokanning.openai-gpt3-java', module='client', version='0.14.0')
+)
+@Grapes(
+	@Grab(group='com.theokanning.openai-gpt3-java', module='service', version='0.14.0')
 )
 
 //package example;
@@ -17,6 +23,16 @@ import java.nio.file.Files
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+
+import javafx.scene.control.Tab
+import javafx.scene.image.Image
+import javafx.application.Platform
+import javafx.scene.Group;
+import javafx.scene.Scene;
+import javafx.scene.image.Image;
+import javafx.scene.image.ImageView;
+import javafx.stage.Stage;
+
 
 class OpenAiApiExample {
     public static void main(String... args) {		
@@ -48,6 +64,7 @@ class OpenAiApiExample {
 		
 		System.out.println("\nImage is located at:");
 		System.out.println(service.createImage(request).getData().get(0).getUrl());
+		open in tab
 		
 		System.out.println("Streaming chat completion...");
 		final List<ChatMessage> messages = new ArrayList<>();
@@ -69,3 +86,41 @@ class OpenAiApiExample {
 		service.shutdownExecutor();
 	}
 }
+
+class TabManagerDevice{
+	String myName;
+	boolean connected=false;
+	ImageView imageView = new ImageView();
+	Tab t = new Tab()
+	public TabManagerDevice(String name) {
+		myName=name;
+		
+	}
+	
+	String getName() {
+		return myName
+	}
+	
+	boolean connect() {
+		connected=true;
+		t.setContent(imageView)
+		t.setText(myName)
+		t.setOnCloseRequest({event ->
+			disconnect()
+		});
+		BowlerStudioController.addObject(t, null)
+		return connected
+	}
+	void disconnect() {
+		if(connected) {
+			BowlerStudioController.removeObject(t)
+		}
+		
+	}
+}
+
+def tabHolder = DeviceManager.getSpecificDevice("ImageRequest", {
+	TabManagerDevice dev = new TabManagerDevice("ImageRequest")
+	dev.connect()
+	return dev
+})
