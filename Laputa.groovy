@@ -93,8 +93,8 @@ public class QAPatternExample {
 		}
 		System.out.println("Loading API key from " + keyFile);
 		String apiKey = new String(Files.readAllBytes(keyFile.toPath()));
-		ModelAPIClient apiClient = new ModelAPIClient("gpt-key.txt");
-		System.out.println(apiClient.getModels());
+//		ModelAPIClient apiClient = new ModelAPIClient("gpt-key.txt");
+//		System.out.println(apiClient.getModels());
 		
 		// Step 3: Get embeddings for the user's question
 		List<String> questionSegments = getSegmentsFromString(question);
