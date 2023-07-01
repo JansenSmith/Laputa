@@ -1,3 +1,7 @@
+@Grapes(
+	@Grab(group='com.theokanning.openai-gpt3-java', module='client', version='0.14.0')
+)
+
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
