@@ -63,8 +63,15 @@ class OpenAiApiExample {
 		      .build();
 		
 		System.out.println("\nImage is located at:");
-		System.out.println(service.createImage(request).getData().get(0).getUrl());
-		open in tab
+		String imageUrl = service.createImage(request).getData().get(0).getUrl()
+        Platform.runLater(new Runnable() {
+            void run() {
+                ImageView imageView = new ImageView()
+                Image image = new Image(imageUrl)
+                imageView.setImage(image)
+            }
+        })
+		System.out.println(imageUrl);
 		
 		System.out.println("Streaming chat completion...");
 		final List<ChatMessage> messages = new ArrayList<>();
@@ -119,8 +126,8 @@ class TabManagerDevice{
 	}
 }
 
-def tabHolder = DeviceManager.getSpecificDevice("ImageRequest", {
-	TabManagerDevice dev = new TabManagerDevice("ImageRequest")
-	dev.connect()
-	return dev
-})
+//static def tabHolder = DeviceManager.getSpecificDevice("ImageRequest", {
+//	TabManagerDevice dev = new TabManagerDevice("ImageRequest")
+//	dev.connect()
+//	return dev
+//})
