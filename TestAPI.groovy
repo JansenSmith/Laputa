@@ -19,6 +19,7 @@ import com.theokanning.openai.image.CreateImageRequest;
 
 import com.neuronrobotics.bowlerstudio.scripting.ScriptingEngine
 import com.neuronrobotics.bowlerstudio.BowlerStudioController
+import com.neuronrobotics.sdk.common.DeviceManager
 import java.nio.file.Files
 
 import java.util.ArrayList;
@@ -88,8 +89,8 @@ class OpenAiApiExample {
 		      .build();
 		
 		service.streamChatCompletion(chatCompletionRequest)
-		    //  .doOnError({Throwable::printStackTrace})
-		      //.blockingForEach(System.out::println);
+		      .doOnError({ throwable -> throwable.printStackTrace() })
+		      .blockingForEach({ System.out.println(it) });
 		
 		service.shutdownExecutor();
 	}
@@ -125,10 +126,11 @@ class TabManagerDevice{
 		}
 		
 	}
+	def tabHolder = DeviceManager.getSpecificDevice("ImageRequest", {
+		TabManagerDevice dev = new TabManagerDevice("ImageRequest")
+		dev.connect()
+		return dev
+	})
 }
 
-static def tabHolder = DeviceManager.getSpecificDevice("ImageRequest", {
-	TabManagerDevice dev = new TabManagerDevice("ImageRequest")
-	dev.connect()
-	return dev
-})
+
