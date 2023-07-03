@@ -8,8 +8,8 @@
 	@Grab(group='com.theokanning.openai-gpt3-java', module='service', version='0.14.0')
 )
 
-//package example;
 
+import com.theokanning.openai.model.Model;
 import com.theokanning.openai.completion.chat.ChatCompletionRequest;
 import com.theokanning.openai.completion.chat.ChatMessage;
 import com.theokanning.openai.completion.chat.ChatMessageRole;
@@ -21,79 +21,176 @@ import com.neuronrobotics.bowlerstudio.scripting.ScriptingEngine
 import com.neuronrobotics.bowlerstudio.BowlerStudioController
 import com.neuronrobotics.sdk.common.DeviceManager
 import java.nio.file.Files
+import java.nio.file.Path
+import java.nio.file.Paths
 
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.awt.image.BufferedImage
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 
 import javafx.scene.control.Tab
 import javafx.scene.image.Image
 import javafx.application.Platform
 import javafx.scene.Group;
 import javafx.scene.Scene;
-import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.stage.Stage;
+import javafx.embed.swing.SwingFXUtils;
+
+import javax.imageio.ImageIO;
 
 
 class OpenAiApiExample {
-    public static void main(String... args) {		
-		// Step 1: Retrieve the user's API key from a local file in bowler-workspace
-		File keyFile = new File(ScriptingEngine.getWorkspace(), "gpt-key.txt");
-		if (!keyFile.exists()) {
-			// If the API key file doesn't exist, prompt the user to enter it
-		    KeyDialog(keyFile);
-		    return;
+    public static void main(String... args) {
+        boolean shouldDisplayModels = true; // Set to true to run the model display test
+        boolean shouldRunTextCompletion = true; // Set to true to run the text completion test
+        boolean shouldRunImageGeneration = false; // Set to true to run the image generation test
+        boolean shouldStreamChatCompletion = false; // Set to true to run the chat completion streaming test
+        
+		
+        //
+        // Test 1: Retrieve the user's API key from a local file in bowler-workspace
+        File keyFile = new File(ScriptingEngine.getWorkspace(), "gpt-key.txt");
+        if (!keyFile.exists()) {
+            // If the API key file doesn't exist, prompt the user to enter it
+            KeyDialog(keyFile);
+            return;
+        }
+        System.out.println("Loading API key from " + keyFile);
+        String apiKey = new String(Files.readAllBytes(keyFile.toPath()));
+        OpenAiService service = new OpenAiService(apiKey);
+		
+		
+		//
+		// Test 2: List models
+		if (shouldDisplayModels) {
+		    System.out.println("Listing models...");
+		    List<Model> models = service.listModels();
+		    for (Model model : models) {
+		        System.out.println(model.id);
+		    }
+		    // assertFalse(models.isEmpty());
 		}
-		System.out.println("Loading API key from " + keyFile);
-		String apiKey = new String(Files.readAllBytes(keyFile.toPath()));
-		OpenAiService service = new OpenAiService(apiKey);
+
 		
-		System.out.println("\nCreating completion...");
-		CompletionRequest completionRequest = CompletionRequest.builder()
-		      .model("ada")
-		      .prompt("Somebody once told me the world is gonna roll me")
-		      .echo(true)
-		      .user("testing")
-		      .n(3)
-		      .build();
-		service.createCompletion(completionRequest).getChoices().forEach{println it};
 		
-		System.out.println("\nCreating Image...");
-		CreateImageRequest request = CreateImageRequest.builder()
-		      .prompt("A cow breakdancing with a turtle")
-		      .build();
+        //
+        // Test 3: Create a text completion request
+        if (shouldRunTextCompletion) {
+            System.out.println("\nCreating completion...");
+            CompletionRequest completionRequest = CompletionRequest.builder()
+                    .model("ada")
+                    .prompt("Somebody once told me the world is gonna roll me")
+                    .echo(true)
+                    .user("testing")
+                    .n(3)
+                    .build();
+            service.createCompletion(completionRequest).getChoices().forEach{println it};
+        }
 		
-		System.out.println("\nImage is located at:");
-		String imageUrl = service.createImage(request).getData().get(0).getUrl()
-        Platform.runLater(new Runnable() {
-            void run() {
-                ImageView imageView = new ImageView()
-                Image image = new Image(imageUrl)
-                imageView.setImage(image)
-            }
-        })
-		System.out.println(imageUrl);
 		
-		System.out.println("Streaming chat completion...");
-		final List<ChatMessage> messages = new ArrayList<>();
-		final ChatMessage systemMessage = new ChatMessage(ChatMessageRole.SYSTEM.value(), "You are a dog and will speak as such.");
-		messages.add(systemMessage);
-		ChatCompletionRequest chatCompletionRequest = ChatCompletionRequest
-		      .builder()
-		      .model("gpt-3.5-turbo")
-		      .messages(messages)
-		      .n(1)
-		      .maxTokens(50)
-		      .logitBias(new HashMap<>())
-		      .build();
+        //
+        // Test 4: Create an image generation request
+        if (shouldRunImageGeneration) {
+            System.out.println("\nCreating Image...");
+            CreateImageRequest request = CreateImageRequest.builder()
+                    .prompt("An orange cow breakdancing with a turtle in a scene from Stomp The Yard, hyper realistic high fidelity")
+                    .build();
+
+            System.out.println("\nImage is located at:");
+            String imageUrl = service.createImage(request).getData().get(0).getUrl();
+            TabManagerDevice tabManager = new TabManagerDevice("ImageRequest");
+
+	        Platform.runLater(new Runnable() {
+	            @Override
+	            public void run() {
+	                ImageView imageView = tabManager.imageView;
+	                imageView.setPreserveRatio(true);
+	                imageView.setFitHeight(500); // Set the desired height
+	                Image image = new Image(imageUrl);
+	
+	                // Create a timestamp for the image file name
+	                DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
+	                LocalDateTime now = LocalDateTime.now();
+	                String timestamp = now.format(formatter);
+	
+	                // Save the image to the bowler-workspace/ImageGeneration folder with timestamp in the file name
+	                String imageName = "image_" + timestamp + ".png";
+	                String workspacePath = ScriptingEngine.getWorkspace();
+	                String folderPath = Paths.get(workspacePath, "ImageGeneration").toString();
+	                File folder = new File(folderPath);
+	                String imagePath = Paths.get(folderPath, imageName).toString();
+	                System.out.println(imagePath);
+	
+	                // Check if the folder exists, and create it if it doesn't
+	                if (!folder.exists()) {
+	                    folder.mkdirs();
+	                }
+	
+	                File imageFile = new File(imagePath);
+	
+	                FileOutputStream fos = null;
+	                try {
+	                    fos = new FileOutputStream(imageFile);
+	
+	                    // Save the image to the file
+	                    BufferedImage bufferedImage = SwingFXUtils.fromFXImage(image, null);
+	                    ImageIO.write(bufferedImage, "png", fos);
+	                    System.out.println("Image saved to: " + imageFile.getAbsolutePath());
+	
+	                    // Display the saved image
+	                    imageView.setImage(new Image(imageFile.toURI().toString()));
+	                    tabManager.connect();
+	                } catch (IOException e) {
+	                    e.printStackTrace();
+	                } finally {
+	                    if (fos != null) {
+	                        try {
+	                            fos.close();
+	                        } catch (IOException e) {
+	                            e.printStackTrace();
+	                        }
+	                    }
+	                }
+	            }
+	        });
+
+            System.out.println(imageUrl);
+        }
 		
-		service.streamChatCompletion(chatCompletionRequest)
-		      .doOnError({ throwable -> throwable.printStackTrace() })
-		      .blockingForEach({ System.out.println(it) });
 		
+        //
+        // Test 5: Stream a chat completion request
+        if (shouldStreamChatCompletion) {
+            System.out.println("Streaming chat completion...");
+            final List<ChatMessage> messages = new ArrayList<>();
+            final ChatMessage systemMessage = new ChatMessage(ChatMessageRole.SYSTEM.value(), "You are a dog and will speak as such.");
+            messages.add(systemMessage);
+            ChatCompletionRequest chatCompletionRequest = ChatCompletionRequest
+                    .builder()
+                    .model("gpt-3.5-turbo")
+                    .messages(messages)
+                    .n(1)
+                    .maxTokens(50)
+                    .logitBias(new HashMap<>())
+                    .build();
+
+//			service.streamChatCompletion(chatCompletionRequest).blockingForEach { completion ->
+//			    println(completion)
+//			}
+
+        }
+		
+		//
+		// Bookkeeping: shutdown the service executor 
 		service.shutdownExecutor();
-	}
+    }
 }
 
 class TabManagerDevice{
@@ -126,11 +223,6 @@ class TabManagerDevice{
 		}
 		
 	}
-	def tabHolder = DeviceManager.getSpecificDevice("ImageRequest", {
-		TabManagerDevice dev = new TabManagerDevice("ImageRequest")
-		dev.connect()
-		return dev
-	})
 }
 
 
