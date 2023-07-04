@@ -58,9 +58,9 @@ class OpenAiApiExample {
 		// Test 1: Retrieve the user's API key from a local file in bowler-workspace
 		File keyFile = new File(ScriptingEngine.getWorkspace(), "gpt-key.txt");
 		if (!keyFile.exists()) {
-		  // If the API key file doesn't exist, prompt the user to enter it
-		  KeyDialog(keyFile);
-		  return;
+			// If the API key file doesn't exist, prompt the user to enter it
+			KeyDialog(keyFile);
+			return;
 		}
 		System.out.println("Loading API key from " + keyFile);
 		String apiKey = new String(Files.readAllBytes(keyFile.toPath()));
