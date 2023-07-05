@@ -198,8 +198,6 @@ class OpenAiApiExample {
 		}
 
 
-		
-		
         //
         // Test 6: Run a chat completion request
 		// for implementation details, see https://github.com/TheoKanning/openai-java/blob/c047f73c9cdb4d14b9f88fd554cb1339ec61e78b/api/src/main/java/com/theokanning/openai/completion/chat/ChatCompletionRequest.java#L16
@@ -226,6 +224,26 @@ class OpenAiApiExample {
 			
 		    println("\nResponse:")
 			println("${response.toString().trim()}")
+        }
+
+
+        //
+        // Test 7: Run a function call request
+		// for implementation details, see https://github.com/TheoKanning/openai-java/blob/main/example/src/main/java/example/OpenAiApiFunctionsExample.java
+        if (shouldRunFunction) {
+			
+			// code here
+			
+        }
+
+
+        //
+        // Test 8: Run a file parsing request
+		// for implementation details, see ???
+        if (shouldParseFile) {
+			
+			// code here
+			
         }
 		
 		//
