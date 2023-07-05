@@ -48,6 +48,8 @@ class OpenAiApiExample {
         boolean shouldRunImageGeneration = false; // Set to true to run the image generation test
         boolean shouldStreamChatCompletion = false; // Set to true to run the chat completion streaming test
         boolean shouldRunChatCompletion = true; // Set to true to run the chat completion test
+		boolean shouldRunFunction = false; // Set to true to run the function test
+		boolean shouldParseFile = false; // Set to true to test parsing a file with NLM
         
 		
 		//
@@ -80,7 +82,7 @@ class OpenAiApiExample {
         if (shouldRunTextCompletion) {
             System.out.println("\nCreating completion...");
             CompletionRequest completionRequest = CompletionRequest.builder()
-                    .model("gpt-3.5-turbo-16k-0613")
+                    .model("ada")
                     .prompt("Somebody once told me the world is gonna roll me")
                     .echo(true)
                     .user("testing")
