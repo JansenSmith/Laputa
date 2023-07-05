@@ -200,34 +200,30 @@ class OpenAiApiExample {
 		
         //
         // Test 6: Run a chat completion request
+		// for implementation details, see https://github.com/TheoKanning/openai-java/blob/c047f73c9cdb4d14b9f88fd554cb1339ec61e78b/api/src/main/java/com/theokanning/openai/completion/chat/ChatCompletionRequest.java#L16
         if (shouldRunChatCompletion) {
 		    println("Running chat completion...")
 		    final messages = []
 		    final systemMessage = new ChatMessage(ChatMessageRole.SYSTEM.value(), "You are a fortune teller. Tell me my fortune.")
 		    messages.add(systemMessage)
-		    final chatCompletionRequest = ChatCompletionRequest
-		            .builder()
-		            .model("gpt-3.5-turbo-0613")
-		            .messages(messages)
-		            .n(1)
-		            .maxTokens(50)
-		            .logitBias(new HashMap<>())
-		            .build()
-		
-		    def messageContent = new StringBuilder()
-		
-		    service.streamChatCompletion(chatCompletionRequest).blockingForEach { chunk ->
-		        chunk.getChoices().each { choice ->
-		            def message = choice.getMessage()
-		            if (message != null && message.getContent() != null) {
-		                messageContent.append(message.getContent())
-		                System.out.flush()
-		            }
-		        }
-		    }
 			
-		    println("\nFinal message content:")
-			println("${messageContent.toString().trim()}")
+			ChatCompletionRequest completionRequest = ChatCompletionRequest
+				.builder()
+				.model("gpt-3.5-turbo-0613")
+				.messages(messages)
+				.temperature(0.6)
+				.n(3)
+				.stream(false)
+                .maxTokens(100)
+				.logitBias(new HashMap<>())
+				.build();
+				
+			ChatMessage responseMessage = service.createChatCompletion(completionRequest).getChoices().get(0).getMessage();
+			messages.add(responseMessage); // don't forget to update the conversation with the latest response
+			String response = responseMessage.getContent()
+			
+		    println("\nResponse:")
+			println("${response.toString().trim()}")
         }
 		
 		//
