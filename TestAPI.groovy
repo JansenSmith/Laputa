@@ -46,8 +46,8 @@ class OpenAiApiExample {
         boolean shouldDisplayModels = false; // Set to true to run the model display test
         boolean shouldRunTextCompletion = false; // Set to true to run the text completion test
         boolean shouldRunImageGeneration = false; // Set to true to run the image generation test
-        boolean shouldStreamChatCompletion = true; // Set to true to run the chat completion streaming test
-        boolean shouldRunChatCompletion = false; // Set to true to run the chat completion test
+        boolean shouldStreamChatCompletion = false; // Set to true to run the chat completion streaming test
+        boolean shouldRunChatCompletion = true; // Set to true to run the chat completion test
         
 		
 		//
@@ -226,7 +226,7 @@ class OpenAiApiExample {
 		        }
 		    }
 			
-		    println("\n\nFinal message content:")
+		    println("\nFinal message content:")
 			println("${messageContent.toString().trim()}")
         }
 		
