@@ -1,9 +1,4 @@
-@Grapes(
-	@Grab(group='com.theokanning.openai-gpt3-java', module='api', version='0.14.0')
-)
-@Grapes(
-	@Grab(group='com.theokanning.openai-gpt3-java', module='client', version='0.14.0')
-)
+
 @Grapes(
 	@Grab(group='com.theokanning.openai-gpt3-java', module='service', version='0.14.0')
 )
@@ -49,9 +44,10 @@ import javax.imageio.ImageIO;
 class OpenAiApiExample {
     public static void main(String... args) {
         boolean shouldDisplayModels = false; // Set to true to run the model display test
-        boolean shouldRunTextCompletion = true; // Set to true to run the text completion test
+        boolean shouldRunTextCompletion = false; // Set to true to run the text completion test
         boolean shouldRunImageGeneration = false; // Set to true to run the image generation test
-        boolean shouldStreamChatCompletion = false; // Set to true to run the chat completion streaming test
+        boolean shouldStreamChatCompletion = true; // Set to true to run the chat completion streaming test
+        boolean shouldRunChatCompletion = false; // Set to true to run the chat completion test
         
 		
 		//
@@ -77,7 +73,6 @@ class OpenAiApiExample {
 		    }
 		    // assertFalse(models.isEmpty());
 		}
-
 		
 		
         //
@@ -85,7 +80,7 @@ class OpenAiApiExample {
         if (shouldRunTextCompletion) {
             System.out.println("\nCreating completion...");
             CompletionRequest completionRequest = CompletionRequest.builder()
-                    .model("ada")
+                    .model("gpt-3.5-turbo-16k-0613")
                     .prompt("Somebody once told me the world is gonna roll me")
                     .echo(true)
                     .user("testing")
@@ -170,21 +165,28 @@ class OpenAiApiExample {
         if (shouldStreamChatCompletion) {
             System.out.println("Streaming chat completion...");
             final List<ChatMessage> messages = new ArrayList<>();
-            final ChatMessage systemMessage = new ChatMessage(ChatMessageRole.SYSTEM.value(), "You are a dog and will speak as such.");
+            final ChatMessage systemMessage = new ChatMessage(ChatMessageRole.SYSTEM.value(), "You are a fortune teller. Tell me my fortune.");
             messages.add(systemMessage);
             ChatCompletionRequest chatCompletionRequest = ChatCompletionRequest
                     .builder()
-                    .model("gpt-3.5-turbo")
+                    .model("gpt-3.5-turbo-0613")
                     .messages(messages)
                     .n(1)
                     .maxTokens(50)
                     .logitBias(new HashMap<>())
                     .build();
 
-//			service.streamChatCompletion(chatCompletionRequest).blockingForEach { completion ->
-//			    println(completion)
-//			}
+			service.streamChatCompletion(chatCompletionRequest).blockingForEach { println it }
 
+        }
+		
+		
+        //
+        // Test 6: Run a chat completion request
+        if (shouldRunChatCompletion) {
+			
+			// code here
+			
         }
 		
 		//
