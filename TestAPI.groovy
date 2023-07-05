@@ -160,33 +160,74 @@ class OpenAiApiExample {
         }
 		
 		
-        //
-        // Test 5: Stream a chat completion request
-        if (shouldStreamChatCompletion) {
-            System.out.println("Streaming chat completion...");
-            final List<ChatMessage> messages = new ArrayList<>();
-            final ChatMessage systemMessage = new ChatMessage(ChatMessageRole.SYSTEM.value(), "You are a fortune teller. Tell me my fortune.");
-            messages.add(systemMessage);
-            ChatCompletionRequest chatCompletionRequest = ChatCompletionRequest
-                    .builder()
-                    .model("gpt-3.5-turbo-0613")
-                    .messages(messages)
-                    .n(1)
-                    .maxTokens(50)
-                    .logitBias(new HashMap<>())
-                    .build();
+		//
+		// Test 5: Stream a chat completion request
+		if (shouldStreamChatCompletion) {
+		    println("Streaming chat completion...")
+		    final messages = []
+		    final systemMessage = new ChatMessage(ChatMessageRole.SYSTEM.value(), "You are a fortune teller. Tell me my fortune.")
+		    messages.add(systemMessage)
+		    final chatCompletionRequest = ChatCompletionRequest
+		            .builder()
+		            .model("gpt-3.5-turbo-0613")
+		            .messages(messages)
+		            .n(1)
+		            .maxTokens(50)
+		            .logitBias(new HashMap<>())
+		            .build()
+		
+		    def messageContent = new StringBuilder()
+			println("Current message content:")
+		
+		    service.streamChatCompletion(chatCompletionRequest).blockingForEach { chunk ->
+		        chunk.getChoices().each { choice ->
+		            def message = choice.getMessage()
+		            if (message != null && message.getContent() != null) {
+		                messageContent.append(message.getContent())
+		                print("${message.getContent().toString().trim()} ")
+		                System.out.flush()
+		            }
+		        }
+		    }
+			
+			println("")
+		    println("\nFinal message content:")
+			println("${messageContent.toString().trim()}")
+		}
 
-			service.streamChatCompletion(chatCompletionRequest).blockingForEach { println it }
 
-        }
 		
 		
         //
         // Test 6: Run a chat completion request
         if (shouldRunChatCompletion) {
+		    println("Running chat completion...")
+		    final messages = []
+		    final systemMessage = new ChatMessage(ChatMessageRole.SYSTEM.value(), "You are a fortune teller. Tell me my fortune.")
+		    messages.add(systemMessage)
+		    final chatCompletionRequest = ChatCompletionRequest
+		            .builder()
+		            .model("gpt-3.5-turbo-0613")
+		            .messages(messages)
+		            .n(1)
+		            .maxTokens(50)
+		            .logitBias(new HashMap<>())
+		            .build()
+		
+		    def messageContent = new StringBuilder()
+		
+		    service.streamChatCompletion(chatCompletionRequest).blockingForEach { chunk ->
+		        chunk.getChoices().each { choice ->
+		            def message = choice.getMessage()
+		            if (message != null && message.getContent() != null) {
+		                messageContent.append(message.getContent())
+		                System.out.flush()
+		            }
+		        }
+		    }
 			
-			// code here
-			
+		    println("\n\nFinal message content:")
+			println("${messageContent.toString().trim()}")
         }
 		
 		//
