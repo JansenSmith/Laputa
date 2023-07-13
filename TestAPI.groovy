@@ -54,8 +54,8 @@ class OpenAiApiExample {
 		boolean shouldRunImageGeneration = false; // Set to true to run the image generation test
 		boolean shouldStreamChatCompletion = false; // Set to true to run the chat completion streaming test
 		boolean shouldRunChatCompletion = false; // Set to true to run the chat completion test
-		boolean shouldRunFunction = true; // Set to true to run the function test
-		boolean shouldParseFile = false; // Set to true to test parsing a file with NLM
+		boolean shouldRunFunction = false; // Set to true to run the function test
+		boolean shouldParseFile = true; // Set to true to test parsing a file with NLM
         
 		
 		//
