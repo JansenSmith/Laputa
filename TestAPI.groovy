@@ -55,7 +55,9 @@ class OpenAiApiExample {
 		boolean shouldStreamChatCompletion = false; // Set to true to run the chat completion streaming test
 		boolean shouldRunChatCompletion = false; // Set to true to run the chat completion test
 		boolean shouldRunFunction = false; // Set to true to run the function test
-		boolean shouldParseFile = true; // Set to true to test parsing a file with NLM
+		boolean shouldAddFile = true; // Set to true to test adding a file from bowler-workspace via the API
+		boolean shouldRemoveFile = true; // Set to true to test removing a file via the API
+		boolean shouldReferenceFile = true; // Set to true to test referencing a file in a ChatCompletion
         
 		
 		//
@@ -79,7 +81,7 @@ class OpenAiApiExample {
 		    for (Model model : models) {
 		        System.out.println(model.id);
 		    }
-		    // assertFalse(models.isEmpty());
+		     assertFalse(models.isEmpty());
 		}
 		
 		
@@ -298,7 +300,7 @@ class OpenAiApiExample {
         //
         // Test 8: Run a file parsing request
 		// for implementation details, see ???
-        if (shouldParseFile) {
+        if (shouldAddFile) {
 			
 			// code here
 			
