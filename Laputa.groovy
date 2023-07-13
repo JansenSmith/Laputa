@@ -1,5 +1,6 @@
+
 @Grapes(
-	@Grab(group='com.theokanning.openai-gpt3-java', module='client', version='0.14.0')
+	@Grab(group='com.theokanning.openai-gpt3-java', module='service', version='0.14.0')
 )
 
 import java.io.BufferedReader;
