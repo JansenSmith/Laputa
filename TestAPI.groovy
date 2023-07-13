@@ -298,9 +298,29 @@ class OpenAiApiExample {
 
 
         //
-        // Test 8: Run a file parsing request
+        // Test 8: Run a request to add a file from bowler-workspace via the API
 		// for implementation details, see ???
         if (shouldAddFile) {
+			
+			// code here
+			
+        }
+
+		
+        //
+        // Test 9: Run a request to remove a file via the API
+		// for implementation details, see ???
+        if (shouldRemoveFile) {
+			
+			// code here
+			
+        }
+
+
+        //
+        // Test 10: Run a ChatCompletion that references a file
+		// for implementation details, see ???
+        if (shouldReferenceFile) {
 			
 			// code here
 			
